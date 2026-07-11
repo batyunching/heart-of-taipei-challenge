@@ -130,6 +130,30 @@ export function App() {
     };
   }, [connectedTeam]);
 
+  useEffect(() => {
+    if (!connectedTeam || !isSupabaseConfigured) return;
+
+    const teamId = connectedTeam.id;
+    const refresh = () => {
+      void refreshStudentScoreSummary(teamId);
+    };
+    const timer = window.setInterval(refresh, 15000);
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        refresh();
+      }
+    };
+
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [connectedTeam]);
+
   async function refreshStudentSubmissionStatuses(map = missionIdMap) {
     if (!connectedTeam || !isSupabaseConfigured) return;
 
@@ -160,7 +184,8 @@ export function App() {
     try {
       const summary = await loadTeamScoreSummary(teamId);
       setStudentScoreSummary(summary);
-      setStudentScoreStatus(summary ? "分數已更新" : "尚未產生得分項目");
+      const updatedAt = new Date().toLocaleTimeString("zh-TW", { hour: "2-digit", minute: "2-digit" });
+      setStudentScoreStatus(summary ? `分數已更新 ${updatedAt}` : "尚未產生得分項目");
     } catch {
       setStudentScoreStatus("暫時無法讀取小組分數");
     }
@@ -801,6 +826,9 @@ export function App() {
             <span>退回</span>
             <strong>{studentScoreSummary?.rejected_count ?? 0} 項</strong>
           </div>
+          <button className="secondary-button" type="button" onClick={() => refreshStudentScoreSummary(connectedTeam.id)}>
+            更新分數
+          </button>
           {studentScoreStatus ? <p>{studentScoreStatus}</p> : null}
         </section>
       ) : null}

@@ -50,11 +50,49 @@ export interface TeacherMediaFile {
   created_at: string;
 }
 
+export interface TeacherScoreItem {
+  id: string;
+  activity_id: string;
+  team_id: string;
+  mission_id: string | null;
+  source_table: "submissions" | "media_files" | "world_friend_records";
+  source_id: string;
+  item_key: string;
+  item_label_zh: string;
+  item_label_en: string;
+  score_type: "text_field" | "word_pair" | "photo" | "audio" | "world_friend";
+  max_score: number;
+  awarded_score: number;
+  review_status: "pending" | "approved" | "rejected";
+  review_note: string | null;
+  reviewed_at: string | null;
+  updated_at: string;
+}
+
+export interface TeacherScoreboardRow {
+  team_id: string;
+  team_name: string;
+  team_code: string;
+  passcode_plaintext: string;
+  total_score: number;
+  approved_count: number;
+  pending_count: number;
+  rejected_count: number;
+  peace_park_score: number;
+  ntm_main_score: number;
+  paleontology_score: number;
+  taipei_station_score: number;
+  world_friend_score: number;
+  updated_at: string;
+}
+
 export interface TeacherDashboardData {
   teams: TeacherTeam[];
   missions: TeacherMission[];
   submissions: TeacherSubmission[];
   mediaFiles: TeacherMediaFile[];
+  scoreItems: TeacherScoreItem[];
+  scoreboard: TeacherScoreboardRow[];
 }
 
 export async function registerTeacher(accessCode: string, displayName: string): Promise<TeacherProfile> {
@@ -78,7 +116,7 @@ export async function loadTeacherDashboard(): Promise<TeacherDashboardData> {
   }
   const client = supabase;
 
-  const [teams, missions, submissions] = await Promise.all([
+  const [teams, missions, submissions, scoreItems, scoreboard] = await Promise.all([
     client
       .from("teams")
       .select("id,team_name,team_code,passcode_plaintext,submitted_at,locked,created_at")
@@ -94,9 +132,16 @@ export async function loadTeacherDashboard(): Promise<TeacherDashboardData> {
       .from("submissions")
       .select("id,team_id,mission_id,answer_json,status,updated_at")
       .order("updated_at", { ascending: false }),
+    client
+      .from("score_items")
+      .select(
+        "id,activity_id,team_id,mission_id,source_table,source_id,item_key,item_label_zh,item_label_en,score_type,max_score,awarded_score,review_status,review_note,reviewed_at,updated_at",
+      )
+      .order("updated_at", { ascending: false }),
+    client.rpc("get_teacher_scoreboard"),
   ]);
 
-  for (const result of [teams, missions, submissions]) {
+  for (const result of [teams, missions, submissions, scoreItems, scoreboard]) {
     if (result.error) {
       throw result.error;
     }
@@ -141,7 +186,52 @@ export async function loadTeacherDashboard(): Promise<TeacherDashboardData> {
     missions: (missions.data ?? []) as TeacherMission[],
     submissions: (submissions.data ?? []) as TeacherSubmission[],
     mediaFiles: filesWithUrls,
+    scoreItems: (scoreItems.data ?? []) as TeacherScoreItem[],
+    scoreboard: (scoreboard.data ?? []) as TeacherScoreboardRow[],
   };
+}
+
+export async function approveScoreItem(scoreItemId: string): Promise<void> {
+  if (!supabase) {
+    throw new Error("SUPABASE_NOT_CONFIGURED");
+  }
+
+  const { error } = await supabase.rpc("approve_score_item", {
+    p_score_item_id: scoreItemId,
+  });
+
+  if (error) {
+    throw error;
+  }
+}
+
+export async function rejectScoreItem(scoreItemId: string, note = ""): Promise<void> {
+  if (!supabase) {
+    throw new Error("SUPABASE_NOT_CONFIGURED");
+  }
+
+  const { error } = await supabase.rpc("reject_score_item", {
+    p_score_item_id: scoreItemId,
+    p_note: note,
+  });
+
+  if (error) {
+    throw error;
+  }
+}
+
+export async function resetScoreItem(scoreItemId: string): Promise<void> {
+  if (!supabase) {
+    throw new Error("SUPABASE_NOT_CONFIGURED");
+  }
+
+  const { error } = await supabase.rpc("reset_score_item", {
+    p_score_item_id: scoreItemId,
+  });
+
+  if (error) {
+    throw error;
+  }
 }
 
 export async function approveSubmission(submissionId: string): Promise<void> {

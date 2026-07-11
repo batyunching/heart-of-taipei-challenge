@@ -234,6 +234,39 @@ p {
   margin-top: 1rem;
 }
 
+.score-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.75rem;
+  margin-top: 1rem;
+  border: 1px solid #d1c3ad;
+  border-radius: 8px;
+  background: rgba(255, 253, 248, 0.94);
+  padding: 0.85rem;
+}
+
+.score-strip div {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.score-strip span {
+  color: #536057;
+  font-weight: 800;
+}
+
+.score-strip strong {
+  color: #146c63;
+  font-size: 1.35rem;
+}
+
+.score-strip p {
+  align-self: end;
+  margin: 0;
+  color: #146c63;
+  font-weight: 800;
+}
+
 .team-actions {
   display: flex;
   flex-wrap: wrap;
@@ -537,6 +570,83 @@ label small,
 .teacher-record a {
   color: #146c63;
   font-weight: 800;
+}
+
+.teacher-scoreboard {
+  margin-top: 1rem;
+  border: 1px solid #e2dbcf;
+  border-radius: 8px;
+  background: rgba(255, 253, 248, 0.92);
+  padding: 0.85rem;
+}
+
+.scoreboard-table-wrap {
+  overflow-x: auto;
+}
+
+.scoreboard-table {
+  width: 100%;
+  min-width: 860px;
+  border-collapse: collapse;
+}
+
+.scoreboard-table th,
+.scoreboard-table td {
+  border-bottom: 1px solid #e2dbcf;
+  padding: 0.65rem;
+  text-align: left;
+}
+
+.scoreboard-table thead th {
+  background: #f0ece4;
+  color: #3b403a;
+  font-size: 0.92rem;
+}
+
+.scoreboard-table tbody th {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.scoreboard-table tbody th span {
+  color: #6f766e;
+  font-size: 0.88rem;
+}
+
+.scoreboard-total {
+  color: #146c63;
+  font-size: 1.2rem;
+  font-weight: 900;
+}
+
+.score-item-list {
+  display: grid;
+  gap: 0.55rem;
+  border-top: 1px solid #e2dbcf;
+  margin-top: 0.45rem;
+  padding-top: 0.65rem;
+}
+
+.score-item-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+  border-radius: 8px;
+  background: #f4f1ea;
+  padding: 0.65rem;
+}
+
+.score-item-row > div:first-child {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.score-item-row span,
+.score-item-row small {
+  color: #536057;
+  font-weight: 700;
 }
 
 .sign-row {

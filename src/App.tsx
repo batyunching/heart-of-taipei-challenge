@@ -19,15 +19,19 @@ import {
   type SubmissionStatus,
 } from "./lib/submissionApi";
 import {
+  approveScoreItem,
   approveMediaFile,
   approveSubmission,
   deleteMediaFile,
   deleteSubmission,
   deleteTeamData,
   loadTeacherDashboard,
+  rejectScoreItem,
   registerTeacher,
+  resetScoreItem,
   type TeacherDashboardData,
 } from "./lib/teacherApi";
+import { loadTeamScoreSummary, type TeamScoreSummary } from "./lib/scoreApi";
 import { createTeam, loginTeam } from "./lib/teamApi";
 import type { Mission, MissionDraft, PageKey, SupabaseTeam, TeamDraft, WorldFriendEntry } from "./types/mission";
 
@@ -73,6 +77,8 @@ export function App() {
   const [missionIdMap, setMissionIdMap] = useState<MissionIdMap>({});
   const [missionSyncStatus, setMissionSyncStatus] = useState<Record<string, string>>({});
   const [studentSubmissionStatuses, setStudentSubmissionStatuses] = useState<Record<string, SubmissionStatus>>({});
+  const [studentScoreSummary, setStudentScoreSummary] = useState<TeamScoreSummary | null>(null);
+  const [studentScoreStatus, setStudentScoreStatus] = useState("");
   const [savingMissionId, setSavingMissionId] = useState<string | null>(null);
   const [selectedFiles, setSelectedFiles] = useState<Record<string, Partial<Record<MediaType, File>>>>({});
   const [worldFriendFiles, setWorldFriendFiles] = useState<Record<string, File>>({});
@@ -107,6 +113,7 @@ export function App() {
         if (!cancelled) {
           setMissionIdMap(map);
           void refreshStudentSubmissionStatuses(map);
+          void refreshStudentScoreSummary();
         }
       })
       .catch(() => {
@@ -144,6 +151,18 @@ export function App() {
         ...current,
         system: "暫時無法讀取審核狀態，作答仍可繼續保存。",
       }));
+    }
+  }
+
+  async function refreshStudentScoreSummary(teamId = connectedTeam?.id) {
+    if (!teamId || !isSupabaseConfigured) return;
+
+    try {
+      const summary = await loadTeamScoreSummary(teamId);
+      setStudentScoreSummary(summary);
+      setStudentScoreStatus(summary ? "分數已更新" : "尚未產生得分項目");
+    } catch {
+      setStudentScoreStatus("暫時無法讀取小組分數");
     }
   }
 
@@ -248,6 +267,7 @@ export function App() {
       saveConnectedTeam(created);
       setTeam((current) => ({ ...current, teamName: created.team_name, passcode: created.passcode_plaintext }));
       setTeamSyncStatus(`已建立小組：${created.team_name}，隊伍代碼 ${created.team_code}`);
+      void refreshStudentScoreSummary(created.id);
     } catch (error) {
       setTeamSyncStatus(toFriendlyTeamError(error));
     } finally {
@@ -268,6 +288,7 @@ export function App() {
         passcode: loggedIn.passcode_plaintext,
       }));
       setTeamSyncStatus(`已登入小組：${loggedIn.team_name}，隊伍代碼 ${loggedIn.team_code}`);
+      void refreshStudentScoreSummary(loggedIn.id);
     } catch (error) {
       setTeamSyncStatus(toFriendlyTeamError(error));
     } finally {
@@ -351,6 +372,57 @@ export function App() {
       const data = await loadTeacherDashboard();
       setTeacherDashboardData(data);
       setTeacherStatus("已標記照片審核通過。");
+    } catch (error) {
+      setTeacherStatus(toFriendlyTeacherError(error));
+    } finally {
+      setTeacherActionBusy(null);
+    }
+  }
+
+  async function handleApproveScoreItem(scoreItemId: string) {
+    setTeacherActionBusy(`approve-score-${scoreItemId}`);
+    setTeacherStatus("正在審核通過得分項目...");
+    try {
+      await approveScoreItem(scoreItemId);
+      const data = await loadTeacherDashboard();
+      setTeacherDashboardData(data);
+      setTeacherStatus("已審核通過得分項目。");
+    } catch (error) {
+      setTeacherStatus(toFriendlyTeacherError(error));
+    } finally {
+      setTeacherActionBusy(null);
+    }
+  }
+
+  async function handleRejectScoreItem(scoreItemId: string, label: string) {
+    const note = window.prompt(`請輸入「${label}」退回原因，可留空。`);
+    if (note === null) return;
+
+    setTeacherActionBusy(`reject-score-${scoreItemId}`);
+    setTeacherStatus("正在退回得分項目...");
+    try {
+      await rejectScoreItem(scoreItemId, note);
+      const data = await loadTeacherDashboard();
+      setTeacherDashboardData(data);
+      setTeacherStatus("已退回得分項目。");
+    } catch (error) {
+      setTeacherStatus(toFriendlyTeacherError(error));
+    } finally {
+      setTeacherActionBusy(null);
+    }
+  }
+
+  async function handleResetScoreItem(scoreItemId: string, label: string) {
+    const confirmed = window.confirm(`確定要把「${label}」重設為待審核嗎？`);
+    if (!confirmed) return;
+
+    setTeacherActionBusy(`reset-score-${scoreItemId}`);
+    setTeacherStatus("正在重設得分項目...");
+    try {
+      await resetScoreItem(scoreItemId);
+      const data = await loadTeacherDashboard();
+      setTeacherDashboardData(data);
+      setTeacherStatus("已重設為待審核。");
     } catch (error) {
       setTeacherStatus(toFriendlyTeacherError(error));
     } finally {
@@ -505,6 +577,7 @@ export function App() {
         ...current,
         [mission.id]: savedSubmission.status,
       }));
+      void refreshStudentScoreSummary(connectedTeam.id);
       setSelectedFiles((current) => ({
         ...current,
         [mission.id]: {},
@@ -581,6 +654,9 @@ export function App() {
             onApproveSubmission={handleApproveSubmission}
             onDeleteSubmission={handleDeleteSubmission}
             onApproveMediaFile={handleApproveMediaFile}
+            onApproveScoreItem={handleApproveScoreItem}
+            onRejectScoreItem={handleRejectScoreItem}
+            onResetScoreItem={handleResetScoreItem}
             onDeleteMediaFile={handleDeleteMediaFile}
             onDeleteTeamData={handleDeleteTeamData}
           />
@@ -680,6 +756,28 @@ export function App() {
           {isSupabaseConfigured ? teamSyncStatus : "尚未設定 Supabase 環境變數，因此目前只能使用本機草稿。"}
         </p>
       </section>
+
+      {connectedTeam ? (
+        <section className="score-strip" aria-label="小組目前總分">
+          <div>
+            <span>小組目前總分</span>
+            <strong>{studentScoreSummary?.total_score ?? 0} 分</strong>
+          </div>
+          <div>
+            <span>已通過</span>
+            <strong>{studentScoreSummary?.approved_count ?? 0} 項</strong>
+          </div>
+          <div>
+            <span>待審核</span>
+            <strong>{studentScoreSummary?.pending_count ?? 0} 項</strong>
+          </div>
+          <div>
+            <span>退回</span>
+            <strong>{studentScoreSummary?.rejected_count ?? 0} 項</strong>
+          </div>
+          {studentScoreStatus ? <p>{studentScoreStatus}</p> : null}
+        </section>
+      ) : null}
 
       <nav className="page-tabs" aria-label="關卡頁面">
         {pageOrder.map((key) => {
@@ -1345,6 +1443,9 @@ function TeacherSupabaseDashboard({
   onApproveSubmission,
   onDeleteSubmission,
   onApproveMediaFile,
+  onApproveScoreItem,
+  onRejectScoreItem,
+  onResetScoreItem,
   onDeleteMediaFile,
   onDeleteTeamData,
 }: {
@@ -1356,6 +1457,9 @@ function TeacherSupabaseDashboard({
   onApproveSubmission: (submissionId: string) => void;
   onDeleteSubmission: (submissionId: string, missionName: string) => void;
   onApproveMediaFile: (mediaFileId: string) => void;
+  onApproveScoreItem: (scoreItemId: string) => void;
+  onRejectScoreItem: (scoreItemId: string, label: string) => void;
+  onResetScoreItem: (scoreItemId: string, label: string) => void;
   onDeleteMediaFile: (mediaFileId: string, mediaLabel: string) => void;
   onDeleteTeamData: (teamId: string, teamName: string) => void;
 }) {
@@ -1387,6 +1491,14 @@ function TeacherSupabaseDashboard({
     selectedMissionId === "all"
       ? data.mediaFiles
       : data.mediaFiles.filter((file) => file.mission_id === selectedMissionId);
+  const filteredScoreItems =
+    selectedMissionId === "all"
+      ? data.scoreItems
+      : data.scoreItems.filter((item) => item.mission_id === selectedMissionId);
+  const scoreItemsBySource = groupScoreItemsBySource(filteredScoreItems);
+  const scoreboardByTeam = new Map(data.scoreboard.map((row) => [row.team_id, row]));
+  const totalApprovedScore = filteredScoreItems.reduce((sum, item) => sum + item.awarded_score, 0);
+  const pendingScoreItemCount = filteredScoreItems.filter((item) => item.review_status === "pending").length;
 
   return (
     <section className="page-section">
@@ -1412,6 +1524,14 @@ function TeacherSupabaseDashboard({
         <article>
           <span>媒體檔案</span>
           <strong>{filteredMediaFiles.length}</strong>
+        </article>
+        <article>
+          <span>已核得分</span>
+          <strong>{totalApprovedScore}</strong>
+        </article>
+        <article>
+          <span>待審核得分項</span>
+          <strong>{pendingScoreItemCount}</strong>
         </article>
       </div>
 
@@ -1448,10 +1568,13 @@ function TeacherSupabaseDashboard({
         </div>
       </div>
 
+      <TeacherScoreboardTable rows={data.scoreboard} />
+
       <div className="teacher-team-list">
         {data.teams.map((teamItem) => {
           const teamSubmissions = filteredSubmissions.filter((submission) => submission.team_id === teamItem.id);
           const teamMediaFiles = filteredMediaFiles.filter((file) => file.team_id === teamItem.id);
+          const teamScore = scoreboardByTeam.get(teamItem.id);
           const isExpanded = !collapsedTeamIds[teamItem.id];
 
           return (
@@ -1489,6 +1612,8 @@ function TeacherSupabaseDashboard({
               <div className="teacher-team-summary">
                 <span>作答 {teamSubmissions.length} 筆</span>
                 <span>檔案 {teamMediaFiles.length} 個</span>
+                <span>總分 {teamScore?.total_score ?? 0}</span>
+                <span>待審核 {teamScore?.pending_count ?? 0}</span>
               </div>
 
               {isExpanded ? (
@@ -1499,6 +1624,8 @@ function TeacherSupabaseDashboard({
                       {teamSubmissions.map((submission) => {
                         const mission = data.missions.find((item) => item.id === submission.mission_id);
                         const missionName = mission?.name_zh ?? "未命名關卡";
+                        const sourceScoreItems =
+                          scoreItemsBySource.get(buildScoreSourceKey("submissions", submission.id)) ?? [];
                         return (
                           <div className="teacher-record" key={submission.id}>
                             <strong>{missionName}</strong>
@@ -1523,6 +1650,13 @@ function TeacherSupabaseDashboard({
                               </div>
                             </div>
                             <pre>{formatAnswerJson(submission.answer_json)}</pre>
+                            <ScoreItemList
+                              items={sourceScoreItems}
+                              actionBusy={actionBusy}
+                              onApprove={onApproveScoreItem}
+                              onReject={onRejectScoreItem}
+                              onReset={onResetScoreItem}
+                            />
                           </div>
                         );
                       })}
@@ -1537,6 +1671,7 @@ function TeacherSupabaseDashboard({
                       {teamMediaFiles.map((file) => {
                         const mission = data.missions.find((item) => item.id === file.mission_id);
                         const mediaLabel = file.type === "photo" ? "照片" : "錄音";
+                        const sourceScoreItems = scoreItemsBySource.get(buildScoreSourceKey("media_files", file.id)) ?? [];
                         return (
                           <div className="teacher-record" key={file.id}>
                             <strong>{mediaLabel}：{mission?.name_zh ?? "未指定關卡"}</strong>
@@ -1584,6 +1719,13 @@ function TeacherSupabaseDashboard({
                             ) : (
                               <span>暫時無法產生檔案連結</span>
                             )}
+                            <ScoreItemList
+                              items={sourceScoreItems}
+                              actionBusy={actionBusy}
+                              onApprove={onApproveScoreItem}
+                              onReject={onRejectScoreItem}
+                              onReset={onResetScoreItem}
+                            />
                           </div>
                         );
                       })}
@@ -1600,6 +1742,130 @@ function TeacherSupabaseDashboard({
         })}
       </div>
     </section>
+  );
+}
+
+function TeacherScoreboardTable({
+  rows,
+}: {
+  rows: TeacherDashboardData["scoreboard"];
+}) {
+  if (!rows.length) {
+    return (
+      <section className="teacher-scoreboard">
+        <h3>各組得分統整表</h3>
+        <p className="muted">尚未產生得分資料。學生作答或上傳檔案後，系統會建立待審核得分項目。</p>
+      </section>
+    );
+  }
+
+  return (
+    <section className="teacher-scoreboard">
+      <div className="section-heading">
+        <div>
+          <h3>各組得分統整表</h3>
+          <p className="muted">依老師審核通過的得分項目計算，待審核項目不列入總分。</p>
+        </div>
+      </div>
+      <div className="scoreboard-table-wrap">
+        <table className="scoreboard-table">
+          <thead>
+            <tr>
+              <th>小組</th>
+              <th>總分</th>
+              <th>通過</th>
+              <th>待審核</th>
+              <th>退回</th>
+              <th>228 公園</th>
+              <th>台博館</th>
+              <th>古生物館</th>
+              <th>台北車站</th>
+              <th>世界朋友</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.team_id}>
+                <th scope="row">
+                  <strong>{row.team_name}</strong>
+                  <span>{row.team_code}</span>
+                </th>
+                <td className="scoreboard-total">{row.total_score}</td>
+                <td>{row.approved_count}</td>
+                <td>{row.pending_count}</td>
+                <td>{row.rejected_count}</td>
+                <td>{row.peace_park_score}</td>
+                <td>{row.ntm_main_score}</td>
+                <td>{row.paleontology_score}</td>
+                <td>{row.taipei_station_score}</td>
+                <td>{row.world_friend_score}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function ScoreItemList({
+  items,
+  actionBusy,
+  onApprove,
+  onReject,
+  onReset,
+}: {
+  items: TeacherDashboardData["scoreItems"];
+  actionBusy: string | null;
+  onApprove: (scoreItemId: string) => void;
+  onReject: (scoreItemId: string, label: string) => void;
+  onReset: (scoreItemId: string, label: string) => void;
+}) {
+  if (!items.length) {
+    return <p className="muted">尚未產生得分項目。</p>;
+  }
+
+  return (
+    <div className="score-item-list">
+      {items.map((item) => {
+        const label = item.item_label_zh || item.item_label_en;
+        return (
+          <div className="score-item-row" key={item.id}>
+            <div>
+              <strong>{label}</strong>
+              <span>
+                {formatScoreType(item.score_type)} · {item.awarded_score} / {item.max_score} 分
+              </span>
+              {item.review_note ? <small>退回原因：{item.review_note}</small> : null}
+            </div>
+            <div className="teacher-inline-actions">
+              <span className="status-pill">{formatScoreReviewStatus(item.review_status)}</span>
+              <button
+                className="secondary-button"
+                disabled={item.review_status === "approved" || actionBusy === `approve-score-${item.id}`}
+                onClick={() => onApprove(item.id)}
+              >
+                通過
+              </button>
+              <button
+                className="danger-button"
+                disabled={item.review_status === "rejected" || actionBusy === `reject-score-${item.id}`}
+                onClick={() => onReject(item.id, label)}
+              >
+                退回
+              </button>
+              <button
+                className="secondary-button"
+                disabled={item.review_status === "pending" || actionBusy === `reset-score-${item.id}`}
+                onClick={() => onReset(item.id, label)}
+              >
+                重設
+              </button>
+            </div>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
@@ -1665,12 +1931,17 @@ function downloadTeacherSummaryCsv(
     "作答內容",
     "媒體檔案數",
     "媒體檔案連結",
+    "小組總分",
+    "通過得分項",
+    "待審核得分項",
+    "退回得分項",
     "更新時間",
   ];
 
   const rows = submissions.map((submission) => {
     const teamItem = data.teams.find((item) => item.id === submission.team_id);
     const mission = data.missions.find((item) => item.id === submission.mission_id);
+    const teamScore = data.scoreboard.find((item) => item.team_id === submission.team_id);
     const missionMediaFiles = mediaFiles.filter(
       (file) => file.team_id === submission.team_id && file.mission_id === submission.mission_id,
     );
@@ -1685,6 +1956,10 @@ function downloadTeacherSummaryCsv(
       formatAnswerJson(submission.answer_json),
       String(missionMediaFiles.length),
       missionMediaFiles.map((file) => file.signed_url ?? file.storage_path).join("\n"),
+      String(teamScore?.total_score ?? 0),
+      String(teamScore?.approved_count ?? 0),
+      String(teamScore?.pending_count ?? 0),
+      String(teamScore?.rejected_count ?? 0),
       submission.updated_at,
     ];
   });
@@ -1699,6 +1974,7 @@ function downloadTeacherSummaryCsv(
     .map((file) => {
       const teamItem = data.teams.find((item) => item.id === file.team_id);
       const mission = data.missions.find((item) => item.id === file.mission_id);
+      const teamScore = data.scoreboard.find((item) => item.team_id === file.team_id);
       return [
         teamItem?.team_name ?? "",
         teamItem?.team_code ?? "",
@@ -1709,6 +1985,10 @@ function downloadTeacherSummaryCsv(
         "",
         "1",
         file.signed_url ?? file.storage_path,
+        String(teamScore?.total_score ?? 0),
+        String(teamScore?.approved_count ?? 0),
+        String(teamScore?.pending_count ?? 0),
+        String(teamScore?.rejected_count ?? 0),
         file.created_at,
       ];
     });
@@ -1814,6 +2094,41 @@ function formatSubmissionStatus(status: string) {
 
 function formatMediaReviewStatus(status: string | null) {
   return status === "approved" ? "照片已審核通過" : "照片待審核";
+}
+
+function formatScoreReviewStatus(status: string) {
+  if (status === "approved") return "已得分";
+  if (status === "rejected") return "已退回";
+  return "待審核";
+}
+
+function formatScoreType(type: string) {
+  if (type === "word_pair") return "英文中文配對";
+  if (type === "photo") return "照片";
+  if (type === "audio") return "錄音";
+  if (type === "world_friend") return "外國朋友互動";
+  return "文字欄位";
+}
+
+function buildScoreSourceKey(sourceTable: string, sourceId: string) {
+  return `${sourceTable}:${sourceId}`;
+}
+
+function groupScoreItemsBySource(items: TeacherDashboardData["scoreItems"]) {
+  const result = new Map<string, TeacherDashboardData["scoreItems"]>();
+
+  for (const item of items) {
+    const key = buildScoreSourceKey(item.source_table, item.source_id);
+    const current = result.get(key) ?? [];
+    current.push(item);
+    result.set(key, current);
+  }
+
+  for (const entries of result.values()) {
+    entries.sort((a, b) => a.item_key.localeCompare(b.item_key, "zh-TW"));
+  }
+
+  return result;
 }
 
 function isMissionComplete(mission: Mission, draft?: MissionDraft) {

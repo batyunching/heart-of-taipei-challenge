@@ -125,6 +125,7 @@ function normalizeAnswer(draft: MissionDraft | undefined) {
     audio_name: draft?.audioName ?? "",
     paleontology: draft?.paleontology ?? {},
     station_signs: draft?.stationSigns ?? [],
+    museum_categories: draft?.museumCategories ?? {},
     country_text: draft?.countryText ?? "",
     world_friends: worldFriends,
   };

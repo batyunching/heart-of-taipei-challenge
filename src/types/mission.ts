@@ -71,6 +71,7 @@ export interface MissionDraft {
   audioName?: string;
   stationSigns?: StationSign[];
   paleontology?: Record<string, string>;
+  museumCategories?: MuseumCategoryAnswers;
   countryText?: string;
   interviewCompleted?: boolean;
   worldFriends?: WorldFriendEntry[];
@@ -88,3 +89,10 @@ export interface WorldFriendEntry {
   countryText: string;
   photoName?: string;
 }
+
+export interface MuseumCategoryEntry {
+  word: string;
+  chinese: string;
+}
+
+export type MuseumCategoryAnswers = Record<string, MuseumCategoryEntry[]>;

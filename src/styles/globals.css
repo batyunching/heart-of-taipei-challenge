@@ -420,6 +420,12 @@ mark {
   gap: 0.6rem;
 }
 
+.teacher-inline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
 .teacher-photo-preview {
   width: min(100%, 420px);
   max-height: 320px;
@@ -450,6 +456,44 @@ mark {
   align-self: end;
   margin: 0;
   font-weight: 700;
+}
+
+.museum-category-card {
+  align-content: start;
+}
+
+.museum-category-card > span {
+  color: #146c63;
+  font-weight: 800;
+}
+
+.museum-entry-list {
+  display: grid;
+  gap: 0.45rem;
+  margin-top: 0.75rem;
+}
+
+.museum-entry-row {
+  display: grid;
+  grid-template-columns: 1.8rem minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.museum-entry-row > span {
+  display: grid;
+  place-items: center;
+  width: 1.8rem;
+  height: 1.8rem;
+  border-radius: 999px;
+  background: #dfece6;
+  color: #146c63;
+  font-weight: 900;
+}
+
+.museum-entry-row input {
+  min-width: 0;
+  padding: 0.62rem;
 }
 
 .teacher-record pre {

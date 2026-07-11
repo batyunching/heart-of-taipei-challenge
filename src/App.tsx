@@ -19,7 +19,9 @@ import {
   type SubmissionStatus,
 } from "./lib/submissionApi";
 import {
+  approveMediaFile,
   approveSubmission,
+  deleteSubmission,
   deleteTeamData,
   loadTeacherDashboard,
   registerTeacher,
@@ -300,6 +302,39 @@ export function App() {
     }
   }
 
+  async function handleDeleteSubmission(submissionId: string, missionName: string) {
+    const confirmed = window.confirm(`確定要刪除「${missionName}」這一筆作答嗎？這個動作無法復原。`);
+    if (!confirmed) return;
+
+    setTeacherActionBusy(`delete-submission-${submissionId}`);
+    setTeacherStatus("正在刪除單筆作答...");
+    try {
+      await deleteSubmission(submissionId);
+      const data = await loadTeacherDashboard();
+      setTeacherDashboardData(data);
+      setTeacherStatus("已刪除單筆作答。");
+    } catch (error) {
+      setTeacherStatus(toFriendlyTeacherError(error));
+    } finally {
+      setTeacherActionBusy(null);
+    }
+  }
+
+  async function handleApproveMediaFile(mediaFileId: string) {
+    setTeacherActionBusy(`approve-media-${mediaFileId}`);
+    setTeacherStatus("正在標記照片審核通過...");
+    try {
+      await approveMediaFile(mediaFileId);
+      const data = await loadTeacherDashboard();
+      setTeacherDashboardData(data);
+      setTeacherStatus("已標記照片審核通過。");
+    } catch (error) {
+      setTeacherStatus(toFriendlyTeacherError(error));
+    } finally {
+      setTeacherActionBusy(null);
+    }
+  }
+
   async function handleDeleteTeamData(teamId: string, teamName: string) {
     const confirmed = window.confirm(`確定要刪除「${teamName}」的隊伍、作答與上傳檔案嗎？這個動作無法復原。`);
     if (!confirmed) return;
@@ -476,6 +511,8 @@ export function App() {
             onRefresh={refreshTeacherDashboard}
             actionBusy={teacherActionBusy}
             onApproveSubmission={handleApproveSubmission}
+            onDeleteSubmission={handleDeleteSubmission}
+            onApproveMediaFile={handleApproveMediaFile}
             onDeleteTeamData={handleDeleteTeamData}
           />
         )}
@@ -718,7 +755,9 @@ function MissionCard({
         {mission.keywords.map((keyword) => <span key={keyword}>{keyword}</span>)}
       </div>
 
-      {mission.type === "info_card" ? <MuseumEnglishCards /> : null}
+      {mission.type === "info_card" ? (
+        <MuseumEnglishCards missionId={mission.id} draft={draft} updateDraft={updateDraft} />
+      ) : null}
       {mission.type === "audio" ? (
         <PaleontologyFields
           missionId={mission.id}
@@ -936,20 +975,56 @@ function StationSigns({
   );
 }
 
-function MuseumEnglishCards() {
+function MuseumEnglishCards({
+  missionId,
+  draft,
+  updateDraft,
+}: {
+  missionId: string;
+  draft?: MissionDraft;
+  updateDraft: (id: string, patch: MissionDraft) => void;
+}) {
   const cards = [
-    ["Regulatory", "Rules or instructions visitors should follow.", "No flash photography."],
-    ["Informational", "Helpful facts and visitor information.", "Information desk."],
-    ["Safety", "Signs that protect visitors.", "Emergency exit."],
-    ["Exhibition", "Words used in displays.", "Permanent exhibition."],
+    ["regulatory", "Regulatory", "Rules or instructions visitors should follow.", "No flash photography."],
+    ["informational", "Informational", "Helpful facts and visitor information.", "Information desk."],
+    ["safety", "Safety", "Signs that protect visitors.", "Emergency exit."],
+    ["exhibition", "Exhibition", "Words used in displays.", "Permanent exhibition."],
   ];
+
+  const categories = normalizeMuseumCategories(draft);
+
+  function updateCategory(categoryId: string, rowIndex: number, field: "word" | "chinese", value: string) {
+    const next = normalizeMuseumCategories(draft);
+    next[categoryId] = next[categoryId].map((entry, index) =>
+      index === rowIndex ? { ...entry, [field]: value } : entry,
+    );
+    updateDraft(missionId, { museumCategories: next });
+  }
+
   return (
     <div className="info-card-grid">
-      {cards.map(([title, use, example]) => (
-        <article className="info-card" key={title}>
+      {cards.map(([categoryId, title, use, example]) => (
+        <article className="info-card museum-category-card" key={categoryId}>
           <strong>{title}</strong>
           <p>{use}</p>
           <span>{example}</span>
+          <div className="museum-entry-list">
+            {categories[categoryId].map((entry, index) => (
+              <div className="museum-entry-row" key={`${categoryId}-${index}`}>
+                <span>{index + 1}</span>
+                <input
+                  value={entry.word}
+                  onChange={(event) => updateCategory(categoryId, index, "word", event.target.value)}
+                  placeholder="English word"
+                />
+                <input
+                  value={entry.chinese}
+                  onChange={(event) => updateCategory(categoryId, index, "chinese", event.target.value)}
+                  placeholder="中文意思"
+                />
+              </div>
+            ))}
+          </div>
         </article>
       ))}
     </div>
@@ -1116,6 +1191,8 @@ function TeacherSupabaseDashboard({
   onRefresh,
   actionBusy,
   onApproveSubmission,
+  onDeleteSubmission,
+  onApproveMediaFile,
   onDeleteTeamData,
 }: {
   data: TeacherDashboardData | null;
@@ -1124,6 +1201,8 @@ function TeacherSupabaseDashboard({
   onRefresh: () => void;
   actionBusy: string | null;
   onApproveSubmission: (submissionId: string) => void;
+  onDeleteSubmission: (submissionId: string, missionName: string) => void;
+  onApproveMediaFile: (mediaFileId: string) => void;
   onDeleteTeamData: (teamId: string, teamName: string) => void;
 }) {
   const [selectedMissionId, setSelectedMissionId] = useState("all");
@@ -1265,19 +1344,29 @@ function TeacherSupabaseDashboard({
                     <div className="teacher-record-list">
                       {teamSubmissions.map((submission) => {
                         const mission = data.missions.find((item) => item.id === submission.mission_id);
+                        const missionName = mission?.name_zh ?? "未命名關卡";
                         return (
                           <div className="teacher-record" key={submission.id}>
-                            <strong>{mission?.name_zh ?? "未命名關卡"}</strong>
+                            <strong>{missionName}</strong>
                             <span>{mission?.name_en ?? submission.mission_id}</span>
                             <div className="teacher-record-actions">
                               <span className="status-pill">{formatSubmissionStatus(submission.status)}</span>
-                              <button
-                                className="secondary-button"
-                                disabled={submission.status === "approved" || actionBusy === `approve-${submission.id}`}
-                                onClick={() => onApproveSubmission(submission.id)}
-                              >
-                                {submission.status === "approved" ? "已通過" : "審核通過"}
-                              </button>
+                              <div className="teacher-inline-actions">
+                                <button
+                                  className="secondary-button"
+                                  disabled={submission.status === "approved" || actionBusy === `approve-${submission.id}`}
+                                  onClick={() => onApproveSubmission(submission.id)}
+                                >
+                                  {submission.status === "approved" ? "已通過" : "審核通過"}
+                                </button>
+                                <button
+                                  className="danger-button"
+                                  disabled={actionBusy === `delete-submission-${submission.id}`}
+                                  onClick={() => onDeleteSubmission(submission.id, missionName)}
+                                >
+                                  刪除這筆作答
+                                </button>
+                              </div>
                             </div>
                             <pre>{formatAnswerJson(submission.answer_json)}</pre>
                           </div>
@@ -1297,6 +1386,18 @@ function TeacherSupabaseDashboard({
                           <div className="teacher-record" key={file.id}>
                             <strong>{file.type === "photo" ? "照片" : "錄音"}：{mission?.name_zh ?? "未指定關卡"}</strong>
                             <span>{file.mime_type ?? "unknown"}，{formatFileSize(file.file_size)}</span>
+                            {file.type === "photo" ? (
+                              <div className="teacher-record-actions">
+                                <span className="status-pill">{formatMediaReviewStatus(file.review_status)}</span>
+                                <button
+                                  className="secondary-button"
+                                  disabled={file.review_status === "approved" || actionBusy === `approve-media-${file.id}`}
+                                  onClick={() => onApproveMediaFile(file.id)}
+                                >
+                                  {file.review_status === "approved" ? "照片已通過" : "照片審核通過"}
+                                </button>
+                              </div>
+                            ) : null}
                             {file.signed_url ? (
                               <>
                                 {file.type === "photo" ? (
@@ -1465,6 +1566,7 @@ function formatAnswerJson(answer: Record<string, unknown>) {
     answer.keyword ? `核心單字：${answer.keyword}` : "",
     answer.sentence ? `英文句子：${answer.sentence}` : "",
     formatWorldFriendsAnswer(answer),
+    formatMuseumCategoriesAnswer(answer.museum_categories),
     formatObjectAnswer("古生物資料", answer.paleontology),
     formatObjectAnswer("車站標示", answer.station_signs),
   ].filter(Boolean);
@@ -1497,6 +1599,38 @@ function formatObjectAnswer(label: string, value: unknown) {
   return `${label}：${JSON.stringify(value, null, 2)}`;
 }
 
+function formatMuseumCategoriesAnswer(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return "";
+
+  const labels: Record<string, string> = {
+    regulatory: "Regulatory",
+    informational: "Informational",
+    safety: "Safety",
+    exhibition: "Exhibition",
+  };
+
+  const sections = Object.entries(labels)
+    .map(([key, label]) => {
+      const entries = (value as Record<string, unknown>)[key];
+      if (!Array.isArray(entries)) return "";
+
+      const lines = entries
+        .map((entry, index) => {
+          if (!entry || typeof entry !== "object") return "";
+          const record = entry as Record<string, unknown>;
+          const word = String(record.word ?? "").trim();
+          const chinese = String(record.chinese ?? "").trim();
+          return word || chinese ? `${index + 1}. ${word}${chinese ? `：${chinese}` : ""}` : "";
+        })
+        .filter(Boolean);
+
+      return lines.length ? `${label}\n${lines.join("\n")}` : "";
+    })
+    .filter(Boolean);
+
+  return sections.length ? `博物館英文分類卡：\n${sections.join("\n")}` : "";
+}
+
 function formatFileSize(size: number | null) {
   if (!size) return "未知大小";
   if (size < 1024 * 1024) return `${Math.round(size / 1024)} KB`;
@@ -1508,6 +1642,10 @@ function formatSubmissionStatus(status: string) {
   if (status === "completed") return "學生已完成";
   if (status === "synced") return "已儲存";
   return "草稿";
+}
+
+function formatMediaReviewStatus(status: string | null) {
+  return status === "approved" ? "照片已審核通過" : "照片待審核";
 }
 
 function isMissionComplete(mission: Mission, draft?: MissionDraft) {
@@ -1527,7 +1665,32 @@ function isMissionComplete(mission: Mission, draft?: MissionDraft) {
   if (mission.type === "world_friend") {
     return hasCompletedWorldFriendEntry(draft);
   }
+  if (mission.type === "info_card") {
+    return hasMuseumCategoryAnswers(draft);
+  }
   return true;
+}
+
+function hasMuseumCategoryAnswers(draft?: MissionDraft) {
+  const categories = normalizeMuseumCategories(draft);
+  return Object.values(categories).every((entries) =>
+    entries.some((entry) => entry.word.trim() && entry.chinese.trim()),
+  );
+}
+
+function normalizeMuseumCategories(draft?: MissionDraft) {
+  const categoryIds = ["regulatory", "informational", "safety", "exhibition"];
+  const result = Object.fromEntries(
+    categoryIds.map((categoryId) => [
+      categoryId,
+      Array.from({ length: 5 }, (_, index) => ({
+        word: draft?.museumCategories?.[categoryId]?.[index]?.word ?? "",
+        chinese: draft?.museumCategories?.[categoryId]?.[index]?.chinese ?? "",
+      })),
+    ]),
+  );
+
+  return result;
 }
 
 function hasCompletedWorldFriendEntry(draft?: MissionDraft) {

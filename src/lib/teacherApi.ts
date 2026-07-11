@@ -45,6 +45,7 @@ export interface TeacherMediaFile {
   file_size: number | null;
   mime_type: string | null;
   upload_status: string;
+  review_status: string | null;
   signed_url: string | null;
   created_at: string;
 }
@@ -77,7 +78,7 @@ export async function loadTeacherDashboard(): Promise<TeacherDashboardData> {
   }
   const client = supabase;
 
-  const [teams, missions, submissions, mediaFiles] = await Promise.all([
+  const [teams, missions, submissions] = await Promise.all([
     client
       .from("teams")
       .select("id,team_name,team_code,passcode_plaintext,submitted_at,locked,created_at")
@@ -93,23 +94,43 @@ export async function loadTeacherDashboard(): Promise<TeacherDashboardData> {
       .from("submissions")
       .select("id,team_id,mission_id,answer_json,status,updated_at")
       .order("updated_at", { ascending: false }),
-    client
-      .from("media_files")
-      .select("id,team_id,mission_id,type,storage_path,file_size,mime_type,upload_status,created_at")
-      .order("created_at", { ascending: false }),
   ]);
 
-  for (const result of [teams, missions, submissions, mediaFiles]) {
+  for (const result of [teams, missions, submissions]) {
     if (result.error) {
       throw result.error;
     }
   }
 
+  const mediaFilesWithReview = await client
+    .from("media_files")
+    .select("id,team_id,mission_id,type,storage_path,file_size,mime_type,upload_status,review_status,created_at")
+    .order("created_at", { ascending: false });
+  let mediaFilesData: unknown[] | null = mediaFilesWithReview.data;
+  let mediaFilesError = mediaFilesWithReview.error;
+
+  if (mediaFilesError && mediaFilesError.message.includes("review_status")) {
+    const fallbackMediaFiles = await client
+      .from("media_files")
+      .select("id,team_id,mission_id,type,storage_path,file_size,mime_type,upload_status,created_at")
+      .order("created_at", { ascending: false });
+    mediaFilesData = (fallbackMediaFiles.data ?? []).map((file) => ({
+      ...file,
+      review_status: "pending",
+    }));
+    mediaFilesError = fallbackMediaFiles.error;
+  }
+
+  if (mediaFilesError) {
+    throw mediaFilesError;
+  }
+
   const filesWithUrls = await Promise.all(
-    ((mediaFiles.data ?? []) as Omit<TeacherMediaFile, "signed_url">[]).map(async (file) => {
+    ((mediaFilesData ?? []) as Omit<TeacherMediaFile, "signed_url">[]).map(async (file) => {
       const { data } = await client.storage.from(MEDIA_BUCKET).createSignedUrl(file.storage_path, 60 * 60);
       return {
         ...file,
+        review_status: file.review_status ?? "pending",
         signed_url: data?.signedUrl ?? null,
       };
     }),
@@ -130,6 +151,34 @@ export async function approveSubmission(submissionId: string): Promise<void> {
 
   const { error } = await supabase.rpc("approve_submission", {
     p_submission_id: submissionId,
+  });
+
+  if (error) {
+    throw error;
+  }
+}
+
+export async function deleteSubmission(submissionId: string): Promise<void> {
+  if (!supabase) {
+    throw new Error("SUPABASE_NOT_CONFIGURED");
+  }
+
+  const { error } = await supabase.rpc("delete_submission", {
+    p_submission_id: submissionId,
+  });
+
+  if (error) {
+    throw error;
+  }
+}
+
+export async function approveMediaFile(mediaFileId: string): Promise<void> {
+  if (!supabase) {
+    throw new Error("SUPABASE_NOT_CONFIGURED");
+  }
+
+  const { error } = await supabase.rpc("approve_media_file", {
+    p_media_file_id: mediaFileId,
   });
 
   if (error) {

@@ -30,3 +30,7 @@ export function loadConnectedTeam(): SupabaseTeam | null {
 export function saveConnectedTeam(team: SupabaseTeam) {
   window.localStorage.setItem(CONNECTED_TEAM_KEY, JSON.stringify(team));
 }
+
+export function clearConnectedTeam() {
+  window.localStorage.removeItem(CONNECTED_TEAM_KEY);
+}

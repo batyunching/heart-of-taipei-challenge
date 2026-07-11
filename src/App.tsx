@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { contentPages, interviewPrompts, missions } from "./data/seedContent";
 import {
+  clearConnectedTeam,
   loadConnectedTeam,
   loadDrafts,
   loadTeam,
@@ -327,6 +328,24 @@ export function App() {
     } finally {
       setTeamActionBusy(false);
     }
+  }
+
+  function handleStudentLogout() {
+    const confirmed = window.confirm("確定要登出目前小組並回到首頁嗎？已上傳到雲端的作答、照片與得分不會被刪除。");
+    if (!confirmed) return;
+
+    clearConnectedTeam();
+    setConnectedTeam(null);
+    setStudentScoreSummary(null);
+    setStudentScoreStatus("");
+    setStudentSubmissionStatuses({});
+    setMissionSyncStatus({});
+    setSelectedFiles({});
+    setWorldFriendFiles({});
+    setStationSignFiles({});
+    setActivePage("home");
+    setTeamSyncStatus("已登出目前小組。");
+    setStudentView("landing");
   }
 
   async function handleTeacherUnlock() {
@@ -840,6 +859,15 @@ export function App() {
   return (
     <main className="app-shell">
       <TopBar mode={mode} setMode={setMode} />
+      <div className="student-session-bar">
+        <div>
+          <span>目前小組</span>
+          <strong>{connectedTeam ? `${connectedTeam.team_name} / ${connectedTeam.team_code}` : "尚未登入"}</strong>
+        </div>
+        <button className="secondary-button" type="button" onClick={handleStudentLogout} disabled={!connectedTeam}>
+          登出回首頁
+        </button>
+      </div>
       <section className="hero-panel">
         <p className="eyebrow">Heart of Taipei</p>
         <h1>台北之心・雙語闖關</h1>

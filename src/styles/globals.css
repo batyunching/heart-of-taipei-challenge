@@ -102,6 +102,34 @@ label {
   color: #66736b;
 }
 
+.student-session-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin: 0 0 1rem;
+  border: 1px solid rgba(83, 69, 49, 0.22);
+  border-radius: 8px;
+  background: rgba(255, 253, 248, 0.86);
+  box-shadow: 0 12px 28px rgba(45, 33, 20, 0.08);
+  padding: 0.75rem 0.9rem;
+}
+
+.student-session-bar div {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.student-session-bar span {
+  color: #66736b;
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
+.student-session-bar strong {
+  color: #146c63;
+}
+
 .mode-switch,
 .page-tabs {
   display: flex;
@@ -888,6 +916,7 @@ label small,
   .section-heading,
   .login-hero-card,
   .landing-reminder,
+  .student-session-bar,
   .mission-title,
   .review-row {
     display: grid;

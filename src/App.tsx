@@ -446,24 +446,38 @@ export function App() {
     }
   }
 
-  async function handleApproveTeamScoreItems(teamId: string, teamName: string, scoreItemIds: string[]) {
-    if (!scoreItemIds.length) {
-      setTeacherStatus(`「${teamName}」目前沒有需要批次審核通過的得分項目。`);
+  async function handleApproveTeamScoreItems(
+    teamId: string,
+    teamName: string,
+    scoreItemIds: string[],
+    submissionIds: string[],
+    mediaFileIds: string[],
+  ) {
+    const totalCount = scoreItemIds.length + submissionIds.length + mediaFileIds.length;
+
+    if (!totalCount) {
+      setTeacherStatus(`「${teamName}」目前沒有需要批次審核通過的文字、檔案或得分項目。`);
       return;
     }
 
     const confirmed = window.confirm(
-      `確定要將「${teamName}」目前畫面中的 ${scoreItemIds.length} 個待審核或退回得分項目全部審核通過嗎？`,
+      `確定要將「${teamName}」目前畫面中的 ${submissionIds.length} 筆文字作答、${mediaFileIds.length} 個照片／錄音檔、${scoreItemIds.length} 個得分項目全部審核通過嗎？`,
     );
     if (!confirmed) return;
 
     setTeacherActionBusy(`approve-team-${teamId}`);
-    setTeacherStatus(`正在批次審核通過「${teamName}」的得分項目...`);
+    setTeacherStatus(`正在批次審核通過「${teamName}」的文字、照片、錄音與得分項目...`);
     try {
-      await Promise.all(scoreItemIds.map((scoreItemId) => approveScoreItem(scoreItemId)));
+      await Promise.all([
+        ...submissionIds.map((submissionId) => approveSubmission(submissionId)),
+        ...mediaFileIds.map((mediaFileId) => approveMediaFile(mediaFileId)),
+        ...scoreItemIds.map((scoreItemId) => approveScoreItem(scoreItemId)),
+      ]);
       const data = await loadTeacherDashboard();
       setTeacherDashboardData(data);
-      setTeacherStatus(`已批次審核通過「${teamName}」的 ${scoreItemIds.length} 個得分項目。`);
+      setTeacherStatus(
+        `已批次審核通過「${teamName}」：文字 ${submissionIds.length} 筆、照片／錄音 ${mediaFileIds.length} 個、得分項目 ${scoreItemIds.length} 個。`,
+      );
     } catch (error) {
       setTeacherStatus(toFriendlyTeacherError(error));
     } finally {
@@ -1761,7 +1775,13 @@ function TeacherSupabaseDashboard({
   onDeleteSubmission: (submissionId: string, missionName: string) => void;
   onApproveMediaFile: (mediaFileId: string) => void;
   onApproveScoreItem: (scoreItemId: string) => void;
-  onApproveTeamScoreItems: (teamId: string, teamName: string, scoreItemIds: string[]) => void;
+  onApproveTeamScoreItems: (
+    teamId: string,
+    teamName: string,
+    scoreItemIds: string[],
+    submissionIds: string[],
+    mediaFileIds: string[],
+  ) => void;
   onRejectScoreItem: (scoreItemId: string, label: string) => void;
   onResetScoreItem: (scoreItemId: string, label: string) => void;
   onDeleteMediaFile: (mediaFileId: string, mediaLabel: string) => void;
@@ -1881,6 +1901,10 @@ function TeacherSupabaseDashboard({
           const teamBatchScoreItems = filteredScoreItems.filter(
             (item) => item.team_id === teamItem.id && item.review_status !== "approved",
           );
+          const teamBatchSubmissions = teamSubmissions.filter((submission) => submission.status !== "approved");
+          const teamBatchMediaFiles = teamMediaFiles.filter((file) => file.review_status !== "approved");
+          const teamBatchApproveCount =
+            teamBatchSubmissions.length + teamBatchMediaFiles.length + teamBatchScoreItems.length;
           const teamScore = scoreboardByTeam.get(teamItem.id);
           const isExpanded = !collapsedTeamIds[teamItem.id];
 
@@ -1897,16 +1921,18 @@ function TeacherSupabaseDashboard({
                   <span className="status-pill">{teamItem.locked ? "已鎖定" : "進行中"}</span>
                   <button
                     className="primary-button"
-                    disabled={teamBatchScoreItems.length === 0 || actionBusy === `approve-team-${teamItem.id}`}
+                    disabled={teamBatchApproveCount === 0 || actionBusy === `approve-team-${teamItem.id}`}
                     onClick={() =>
                       onApproveTeamScoreItems(
                         teamItem.id,
                         teamItem.team_name,
                         teamBatchScoreItems.map((item) => item.id),
+                        teamBatchSubmissions.map((submission) => submission.id),
+                        teamBatchMediaFiles.map((file) => file.id),
                       )
                     }
                   >
-                    本組批次通過 {teamBatchScoreItems.length ? `(${teamBatchScoreItems.length})` : ""}
+                    本組批次通過 {teamBatchApproveCount ? `(${teamBatchApproveCount})` : ""}
                   </button>
                   <button
                     className="danger-button"
@@ -1997,21 +2023,17 @@ function TeacherSupabaseDashboard({
                             <strong>{mediaLabel}：{mission?.name_zh ?? "未指定關卡"}</strong>
                             <span>{file.mime_type ?? "unknown"}，{formatFileSize(file.file_size)}</span>
                             <div className="teacher-record-actions">
-                              {file.type === "photo" ? (
-                                <span className="status-pill">{formatMediaReviewStatus(file.review_status)}</span>
-                              ) : (
-                                <span className="status-pill">錄音檔</span>
-                              )}
+                              <span className="status-pill">{formatMediaReviewStatus(file.review_status, file.type)}</span>
                               <div className="teacher-inline-actions">
-                                {file.type === "photo" ? (
-                                  <button
-                                    className="secondary-button"
-                                    disabled={file.review_status === "approved" || actionBusy === `approve-media-${file.id}`}
-                                    onClick={() => onApproveMediaFile(file.id)}
-                                  >
-                                    {file.review_status === "approved" ? "照片已通過" : "照片審核通過"}
-                                  </button>
-                                ) : null}
+                                <button
+                                  className="secondary-button"
+                                  disabled={file.review_status === "approved" || actionBusy === `approve-media-${file.id}`}
+                                  onClick={() => onApproveMediaFile(file.id)}
+                                >
+                                  {file.review_status === "approved"
+                                    ? `${mediaLabel}已通過`
+                                    : `${mediaLabel}審核通過`}
+                                </button>
                                 <button
                                   className="danger-button"
                                   disabled={actionBusy === `delete-media-${file.id}`}
@@ -2412,8 +2434,9 @@ function formatSubmissionStatus(status: string) {
   return "草稿";
 }
 
-function formatMediaReviewStatus(status: string | null) {
-  return status === "approved" ? "照片已審核通過" : "照片待審核";
+function formatMediaReviewStatus(status: string | null, type: "photo" | "audio" = "photo") {
+  const label = type === "photo" ? "照片" : "錄音";
+  return status === "approved" ? `${label}已審核通過` : `${label}待審核`;
 }
 
 function formatScoreReviewStatus(status: string) {

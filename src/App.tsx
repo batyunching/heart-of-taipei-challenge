@@ -45,6 +45,11 @@ const pageOrder: PageKey[] = [
   "review_submit",
 ];
 
+type StudentView = "landing" | "login" | "dashboard";
+
+const heroPng = `${import.meta.env.BASE_URL}images/hero-clay-taipei.png`;
+const heroWebp = `${import.meta.env.BASE_URL}images/hero-clay-taipei.webp`;
+
 const emptyMembers = Array.from({ length: 3 }, () => ({
   className: "",
   seatNumber: "",
@@ -60,6 +65,7 @@ const defaultTeam: TeamDraft = {
 
 export function App() {
   const [mode, setMode] = useState<"student" | "teacher">("student");
+  const [studentView, setStudentView] = useState<StudentView>("landing");
   const [teacherGate, setTeacherGate] = useState("");
   const [teacherDisplayName, setTeacherDisplayName] = useState("現場教師");
   const [teacherUnlocked, setTeacherUnlocked] = useState(false);
@@ -292,6 +298,7 @@ export function App() {
       saveConnectedTeam(created);
       setTeam((current) => ({ ...current, teamName: created.team_name, passcode: created.passcode_plaintext }));
       setTeamSyncStatus(`已建立小組：${created.team_name}，隊伍代碼 ${created.team_code}`);
+      setStudentView("dashboard");
       void refreshStudentScoreSummary(created.id);
     } catch (error) {
       setTeamSyncStatus(toFriendlyTeamError(error));
@@ -313,6 +320,7 @@ export function App() {
         passcode: loggedIn.passcode_plaintext,
       }));
       setTeamSyncStatus(`已登入小組：${loggedIn.team_name}，隊伍代碼 ${loggedIn.team_code}`);
+      setStudentView("dashboard");
       void refreshStudentScoreSummary(loggedIn.id);
     } catch (error) {
       setTeamSyncStatus(toFriendlyTeamError(error));
@@ -716,6 +724,119 @@ export function App() {
     );
   }
 
+  if (studentView === "landing") {
+    return (
+      <main className="app-shell landing-shell">
+        <TopBar mode={mode} setMode={setMode} />
+        <LandingPage
+          connectedTeam={connectedTeam}
+          onStartMission={() => setStudentView(connectedTeam ? "dashboard" : "login")}
+          onTeamLogin={() => setStudentView("login")}
+        />
+      </main>
+    );
+  }
+
+  if (studentView === "login") {
+    return (
+      <main className="app-shell landing-shell">
+        <TopBar mode={mode} setMode={setMode} />
+        <section className="login-hero-card">
+          <div>
+            <p className="eyebrow">Team Login / Create Team</p>
+            <h1>建立小組，開始闖關</h1>
+            <p>請輸入隊名與通關碼。第一次參加的小組可以直接建立隊伍，已建立的小組則用原本通關碼登入。</p>
+          </div>
+          <button className="secondary-button" type="button" onClick={() => setStudentView("landing")}>
+            返回活動首頁
+          </button>
+        </section>
+
+        <section className="team-panel landing-login-panel">
+          <div>
+            <p className="eyebrow">Ready for the Adventure</p>
+            <h2>小組資料</h2>
+          </div>
+          <div className="team-grid">
+            <label>
+              隊名或隊伍代碼
+              <input
+                value={team.teamName}
+                onChange={(event) => setTeam({ ...team, teamName: event.target.value })}
+                placeholder="例如：第一組或 HEART01"
+              />
+            </label>
+            <label>
+              通關碼
+              <input
+                value={team.passcode}
+                onChange={(event) => setTeam({ ...team, passcode: event.target.value })}
+                placeholder="請輸入小組通關碼"
+              />
+            </label>
+            <label>
+              小組人數
+              <select
+                value={team.memberCount}
+                onChange={(event) => updateMemberCount(Number(event.target.value))}
+              >
+                {[3, 4, 5, 6].map((count) => (
+                  <option key={count} value={count}>{count} 人</option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <div className="member-grid">
+            {team.members.map((member, index) => (
+              <div className="member-card" key={index}>
+                <strong>隊員 {index + 1}</strong>
+                <input
+                  value={member.className}
+                  onChange={(event) => updateMember(index, "className", event.target.value)}
+                  placeholder="班級"
+                />
+                <input
+                  value={member.seatNumber}
+                  onChange={(event) => updateMember(index, "seatNumber", event.target.value)}
+                  placeholder="座號"
+                />
+                <input
+                  value={member.studentName}
+                  onChange={(event) => updateMember(index, "studentName", event.target.value)}
+                  placeholder="姓名"
+                />
+              </div>
+            ))}
+          </div>
+          <div className="team-actions">
+            <button
+              className="primary-button"
+              disabled={teamActionBusy || !isSupabaseConfigured}
+              onClick={handleCreateTeam}
+            >
+              建立隊伍 Create Team
+            </button>
+            <button
+              className="secondary-button"
+              disabled={teamActionBusy || !isSupabaseConfigured}
+              onClick={handleLoginTeam}
+            >
+              登入隊伍 Login
+            </button>
+            {connectedTeam ? (
+              <button className="secondary-button" type="button" onClick={() => setStudentView("dashboard")}>
+                前往任務儀表板
+              </button>
+            ) : null}
+          </div>
+          <p className={connectedTeam ? "success-text" : "warning-text"}>
+            {isSupabaseConfigured ? teamSyncStatus : "尚未完成活動資料連線設定，請先由教師確認。"}
+          </p>
+        </section>
+      </main>
+    );
+  }
+
   return (
     <main className="app-shell">
       <TopBar mode={mode} setMode={setMode} />
@@ -731,7 +852,7 @@ export function App() {
         </div>
       </section>
 
-      <section className="team-panel">
+      <section className="team-panel dashboard-team-panel">
         <div>
           <p className="eyebrow">Team Login / Create Team</p>
           <h2>小組登入／建立隊伍</h2>
@@ -898,6 +1019,105 @@ export function App() {
           ))}
       </section>
     </main>
+  );
+}
+
+function LandingPage({
+  connectedTeam,
+  onStartMission,
+  onTeamLogin,
+}: {
+  connectedTeam: SupabaseTeam | null;
+  onStartMission: () => void;
+  onTeamLogin: () => void;
+}) {
+  const previewCards = [
+    {
+      label: "Park",
+      title: "二二八和平公園",
+      text: "從城市公園走進近代臺灣記憶，觀察紀念、公共空間與英文表達。",
+    },
+    {
+      label: "Museum",
+      title: "台博館本館",
+      text: "在百年博物館建築中尋找展覽語言，整理英文單字與中文意思。",
+    },
+    {
+      label: "Fossil",
+      title: "古生物館",
+      text: "選擇化石或史前動物，完成英文介紹並錄下小組口說成果。",
+    },
+    {
+      label: "Station",
+      title: "臺北車站",
+      text: "探索不同功能的雙語指標，拍照記錄交通場域中的英文資訊。",
+    },
+    {
+      label: "World",
+      title: "與世界交朋友",
+      text: "用禮貌英文邀請外國朋友簡短交流，記錄國家與合照成果。",
+    },
+  ];
+
+  return (
+    <>
+      <section className="landing-hero">
+        <div className="landing-copy">
+          <p className="eyebrow">Heart of Taipei</p>
+          <h1>台北之心・雙語闖關</h1>
+          <p className="landing-lead">
+            從公園、博物館、古生物展廳到臺北車站，沿著城市的歷史線索完成英文觀察、照片任務、錄音介紹與真實互動。
+          </p>
+          <div className="landing-actions">
+            <button className="primary-button" type="button" onClick={onStartMission}>
+              {connectedTeam ? "回到任務儀表板" : "開始闖關 Start Mission"}
+            </button>
+            <button className="secondary-button" type="button" onClick={onTeamLogin}>
+              小組登入 Team Login
+            </button>
+          </div>
+          <div className="landing-team-note">
+            <span>活動任務</span>
+            <strong>5 個地點</strong>
+            <span>完成方式</span>
+            <strong>文字、照片、錄音</strong>
+          </div>
+        </div>
+        <picture className="landing-visual">
+          <source srcSet={heroWebp} type="image/webp" />
+          <img src={heroPng} alt="台北之心雙語闖關黏土風格主視覺" />
+        </picture>
+      </section>
+
+      <section className="landing-section">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">Mission Route</p>
+            <h2>今天要走進哪些城市故事？</h2>
+          </div>
+        </div>
+        <div className="landing-mission-grid">
+          {previewCards.map((card) => (
+            <article className="landing-mission-card" key={card.title}>
+              <span>{card.label}</span>
+              <h3>{card.title}</h3>
+              <p>{card.text}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="landing-section landing-reminder">
+        <div>
+          <p className="eyebrow">Before You Go</p>
+          <h2>小組合作提醒</h2>
+        </div>
+        <p>
+          請小組分工保管通關碼、拍照與錄音。遇到外國朋友時，保持禮貌、尊重對方意願；如果被婉拒，也要微笑說：
+          <strong> No problem. Thank you anyway! Have a nice day!</strong>
+        </p>
+      </section>
+    </>
   );
 }
 

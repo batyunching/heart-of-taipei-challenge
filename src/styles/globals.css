@@ -542,7 +542,23 @@ label small,
 .sign-row {
   display: grid;
   gap: 0.5rem;
-  grid-template-columns: minmax(160px, 1fr) minmax(160px, 1fr) minmax(220px, 1fr) auto;
+  grid-template-columns: minmax(160px, 1fr) minmax(160px, 1fr) minmax(220px, 1fr);
+}
+
+.station-sign-card {
+  border: 1px solid rgba(120, 99, 68, 0.24);
+  border-radius: 8px;
+  background: rgba(255, 253, 248, 0.84);
+  padding: 0.85rem;
+}
+
+.station-sign-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  margin-bottom: 0.65rem;
 }
 
 .purpose-zh {
@@ -563,6 +579,11 @@ label small,
 
 .mission-direction-box p:last-child {
   margin-bottom: 0;
+}
+
+.station-photo-note {
+  margin: 0.6rem 0 0;
+  font-weight: 700;
 }
 
 .prompt-card {

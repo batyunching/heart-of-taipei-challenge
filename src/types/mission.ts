@@ -82,6 +82,7 @@ export interface StationSign {
   chinese: string;
   purpose: string;
   location: string;
+  photoName?: string;
 }
 
 export interface WorldFriendEntry {

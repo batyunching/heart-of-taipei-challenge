@@ -76,6 +76,7 @@ export function App() {
   const [savingMissionId, setSavingMissionId] = useState<string | null>(null);
   const [selectedFiles, setSelectedFiles] = useState<Record<string, Partial<Record<MediaType, File>>>>({});
   const [worldFriendFiles, setWorldFriendFiles] = useState<Record<string, File>>({});
+  const [stationSignFiles, setStationSignFiles] = useState<Record<string, File>>({});
   const [drafts, setDrafts] = useState<Record<string, MissionDraft>>(() => loadDrafts());
   const [showChinese, setShowChinese] = useState<Record<PageKey, boolean>>({
     home: false,
@@ -192,6 +193,27 @@ export function App() {
       worldFriends: entries,
       countryText: entries[0]?.countryText ?? "",
       photoName: entries.map((entry) => entry.photoName).filter(Boolean).join("、"),
+    });
+  }
+
+  function selectStationSignPhoto(missionId: string, index: number, file: File | undefined) {
+    const key = `${missionId}:${index}`;
+    setStationSignFiles((current) => {
+      const next = { ...current };
+      if (file) {
+        next[key] = file;
+      } else {
+        delete next[key];
+      }
+      return next;
+    });
+
+    const signs = normalizeStationSigns(drafts[missionId]).map((sign, signIndex) =>
+      signIndex === index ? { ...sign, photoName: file?.name } : sign,
+    );
+    updateDraft(missionId, {
+      stationSigns: signs,
+      photoName: signs.map((sign) => sign.photoName).filter(Boolean).join("、"),
     });
   }
 
@@ -373,6 +395,28 @@ export function App() {
   }
 
   async function uploadSelectedMediaForMission(missionId: string, dbMissionId: string, teamId: string) {
+    if (missionId === "station-signs") {
+      const entries = normalizeStationSigns(drafts[missionId]);
+
+      for (const [index, entry] of entries.entries()) {
+        const file = stationSignFiles[`${missionId}:${index}`];
+        if (!file) continue;
+
+        setMissionSyncStatus((current) => ({
+          ...current,
+          [missionId]: `正在上傳第 ${index + 1} 張雙語指標照片...`,
+        }));
+        await uploadMissionMedia({
+          teamId,
+          missionId: dbMissionId,
+          file,
+          type: "photo",
+        });
+      }
+
+      return;
+    }
+
     if (missionId === "world-friend") {
       const entries = normalizeWorldFriendEntries(drafts["world-friend"]);
 
@@ -467,6 +511,11 @@ export function App() {
       }));
       if (mission.id === "world-friend") {
         setWorldFriendFiles({});
+      }
+      if (mission.id === "station-signs") {
+        setStationSignFiles((current) =>
+          Object.fromEntries(Object.entries(current).filter(([key]) => !key.startsWith(`${mission.id}:`))),
+        );
       }
       setMissionSyncStatus((current) => ({
         ...current,
@@ -688,6 +737,7 @@ export function App() {
               draft={drafts[mission.id]}
               updateDraft={updateDraft}
               onFileSelected={selectMissionFile}
+              onStationPhotoSelected={selectStationSignPhoto}
               onSave={() => handleSaveMission(mission)}
               saveStatus={missionSyncStatus[mission.id] ?? missionSyncStatus.system}
               submissionStatus={studentSubmissionStatuses[mission.id]}
@@ -785,6 +835,7 @@ function MissionCard({
   draft,
   updateDraft,
   onFileSelected,
+  onStationPhotoSelected,
   onSave,
   saveStatus,
   submissionStatus,
@@ -794,6 +845,7 @@ function MissionCard({
   draft?: MissionDraft;
   updateDraft: (id: string, patch: MissionDraft) => void;
   onFileSelected: (id: string, type: MediaType, file: File | undefined) => void;
+  onStationPhotoSelected: (missionId: string, index: number, file: File | undefined) => void;
   onSave: () => void;
   saveStatus?: string;
   submissionStatus?: SubmissionStatus;
@@ -850,7 +902,7 @@ function MissionCard({
           missionId={mission.id}
           draft={draft}
           updateDraft={updateDraft}
-          onFileSelected={onFileSelected}
+          onPhotoSelected={onStationPhotoSelected}
           showChinese={showMissionChinese}
         />
       ) : null}
@@ -991,29 +1043,16 @@ function StationSigns({
   missionId,
   draft,
   updateDraft,
-  onFileSelected,
+  onPhotoSelected,
   showChinese,
 }: {
   missionId: string;
   draft?: MissionDraft;
   updateDraft: (id: string, patch: MissionDraft) => void;
-  onFileSelected: (id: string, type: MediaType, file: File | undefined) => void;
+  onPhotoSelected: (missionId: string, index: number, file: File | undefined) => void;
   showChinese: boolean;
 }) {
-  const stationPurposeOptions = [
-    "Location information",
-    "Direction guidance",
-    "Machine operation",
-    "Arrival / departure information",
-    "Service / safety",
-  ];
-  const signs = Array.from({ length: 5 }, (_, index) => ({
-    english: "",
-    chinese: "",
-    purpose: stationPurposeOptions[index],
-    location: "",
-    ...(draft?.stationSigns?.[index] ?? {}),
-  }));
+  const signs = normalizeStationSigns(draft);
 
   return (
     <div className="sign-list">
@@ -1028,49 +1067,46 @@ function StationSigns({
         ) : null}
       </div>
       {signs.map((sign, index) => (
-        <div className="sign-row" key={index}>
-          <input
-            value={sign.english}
-            onChange={(event) => {
-              const next = [...signs];
-              next[index] = { ...sign, english: event.target.value };
-              updateDraft(missionId, { stationSigns: next });
-            }}
-            placeholder="English"
-          />
-          <input
-            value={sign.chinese}
-            onChange={(event) => {
-              const next = [...signs];
-              next[index] = { ...sign, chinese: event.target.value };
-              updateDraft(missionId, { stationSigns: next });
-            }}
-            placeholder="中文"
-          />
-          <select
-            value={sign.purpose}
-            onChange={(event) => {
-              const next = [...signs];
-              next[index] = { ...sign, purpose: event.target.value };
-              updateDraft(missionId, { stationSigns: next });
-            }}
-          >
-            {stationPurposeOptions.map((option) => (
-              <option key={option}>{option}</option>
-            ))}
-          </select>
-          {showChinese ? <span className="purpose-zh">{getKeywordZh(sign.purpose)}</span> : null}
+        <div className="station-sign-card" key={index}>
+          <div className="station-sign-heading">
+            <strong>
+              {index + 1}. {sign.purpose}
+            </strong>
+            {showChinese ? <span className="purpose-zh">{getKeywordZh(sign.purpose)}</span> : null}
+          </div>
+          <div className="sign-row">
+            <input
+              value={sign.english}
+              onChange={(event) => {
+                const next = [...signs];
+                next[index] = { ...sign, english: event.target.value };
+                updateDraft(missionId, { stationSigns: next });
+              }}
+              placeholder="English on the sign"
+            />
+            <input
+              value={sign.chinese}
+              onChange={(event) => {
+                const next = [...signs];
+                next[index] = { ...sign, chinese: event.target.value };
+                updateDraft(missionId, { stationSigns: next });
+              }}
+              placeholder="中文標示"
+            />
+            <label>
+              雙語指標照片
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={(event) => onPhotoSelected(missionId, index, event.target.files?.[0])}
+              />
+            </label>
+          </div>
+          <p className="muted station-photo-note">
+            {sign.photoName ? `已選擇：${sign.photoName}` : `請上傳「${getKeywordZh(sign.purpose)}」功能的雙語指標照片。`}
+          </p>
         </div>
       ))}
-      <label>
-        任務照片
-        {showChinese ? <small>請上傳能看出五種雙語指標任務的照片。</small> : null}
-        <input
-          type="file"
-          accept="image/jpeg,image/png,image/webp"
-          onChange={(event) => onFileSelected(missionId, "photo", event.target.files?.[0])}
-        />
-      </label>
     </div>
   );
 }
@@ -1778,8 +1814,8 @@ function isMissionComplete(mission: Mission, draft?: MissionDraft) {
   }
   if (mission.type === "station_sign") {
     return Boolean(
-      draft.photoName &&
-        (draft.stationSigns ?? []).filter((sign) => sign.english && sign.chinese && sign.purpose).length >= 5,
+      normalizeStationSigns(draft).filter((sign) => sign.english && sign.chinese && sign.purpose && sign.photoName)
+        .length >= 5,
     );
   }
   if (mission.type === "world_friend") {
@@ -1796,6 +1832,24 @@ function hasMuseumCategoryAnswers(draft?: MissionDraft) {
   return Object.values(categories).every((entries) =>
     entries.some((entry) => entry.word.trim() && entry.chinese.trim()),
   );
+}
+
+function normalizeStationSigns(draft?: MissionDraft) {
+  const stationPurposeOptions = [
+    "Location information",
+    "Direction guidance",
+    "Machine operation",
+    "Arrival / departure information",
+    "Service / safety",
+  ];
+
+  return stationPurposeOptions.map((purpose, index) => ({
+    english: draft?.stationSigns?.[index]?.english ?? "",
+    chinese: draft?.stationSigns?.[index]?.chinese ?? "",
+    purpose,
+    location: "",
+    photoName: draft?.stationSigns?.[index]?.photoName,
+  }));
 }
 
 function normalizeMuseumCategories(draft?: MissionDraft) {

@@ -830,6 +830,15 @@ function getKeywordZh(keyword: string) {
   return keywordTranslations[keyword] ?? "中文輔助";
 }
 
+function getMissionStatusLabel(mission: Mission, draft: MissionDraft | undefined, submissionStatus?: SubmissionStatus) {
+  if (submissionStatus === "approved") return "已審核通過";
+  if (mission.type === "station_sign") {
+    const photoCount = countStationSignPhotos(draft);
+    if (photoCount > 0) return `已選 ${photoCount} 張`;
+  }
+  return isMissionComplete(mission, draft) ? "已完成" : "草稿";
+}
+
 function MissionCard({
   mission,
   draft,
@@ -852,6 +861,7 @@ function MissionCard({
   saveDisabled: boolean;
 }) {
   const [showMissionChinese, setShowMissionChinese] = useState(false);
+  const statusLabel = getMissionStatusLabel(mission, draft, submissionStatus);
 
   return (
     <article className="mission-card">
@@ -860,7 +870,7 @@ function MissionCard({
           <h3>{mission.titleZh}</h3>
           <p>{mission.titleEn}</p>
         </div>
-        <span>{submissionStatus === "approved" ? "已審核通過" : isMissionComplete(mission, draft) ? "已完成" : "草稿"}</span>
+        <span>{statusLabel}</span>
       </div>
       <p>{mission.introEn}</p>
       <button
@@ -1059,11 +1069,11 @@ function StationSigns({
       <div className="mission-direction-box">
         <strong>Photo mission</strong>
         <p>
-          Take photos of five bilingual signs with different functions: location information,
-          direction guidance, machine operation, arrival or departure information, and service or safety.
+          Try to take up to five photos of bilingual signs with different functions. If you cannot find
+          all five, upload the signs you find first.
         </p>
         {showChinese ? (
-          <p>請拍五種不同功能的雙語指標：位置說明、方向引導、機器操作、到站或離站資訊、服務或安全提醒。</p>
+          <p>目標是五種不同功能的雙語指標；如果現場找不到五張，也可以先上傳已找到的照片。</p>
         ) : null}
       </div>
       {signs.map((sign, index) => (
@@ -1103,7 +1113,9 @@ function StationSigns({
             </label>
           </div>
           <p className="muted station-photo-note">
-            {sign.photoName ? `已選擇：${sign.photoName}` : `請上傳「${getKeywordZh(sign.purpose)}」功能的雙語指標照片。`}
+            {sign.photoName
+              ? `已選擇：${sign.photoName}`
+              : `可上傳「${getKeywordZh(sign.purpose)}」功能的雙語指標照片；找不到時可留空。`}
           </p>
         </div>
       ))}
@@ -1813,10 +1825,7 @@ function isMissionComplete(mission: Mission, draft?: MissionDraft) {
     return Boolean(draft.audioName && draft.paleontology && Object.keys(draft.paleontology).length >= 5);
   }
   if (mission.type === "station_sign") {
-    return Boolean(
-      normalizeStationSigns(draft).filter((sign) => sign.english && sign.chinese && sign.purpose && sign.photoName)
-        .length >= 5,
-    );
+    return countStationSignPhotos(draft) > 0;
   }
   if (mission.type === "world_friend") {
     return hasCompletedWorldFriendEntry(draft);
@@ -1850,6 +1859,10 @@ function normalizeStationSigns(draft?: MissionDraft) {
     location: "",
     photoName: draft?.stationSigns?.[index]?.photoName,
   }));
+}
+
+function countStationSignPhotos(draft?: MissionDraft) {
+  return normalizeStationSigns(draft).filter((sign) => Boolean(sign.photoName)).length;
 }
 
 function normalizeMuseumCategories(draft?: MissionDraft) {

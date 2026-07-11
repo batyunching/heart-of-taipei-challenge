@@ -3,7 +3,13 @@ import { supabase } from "./supabase";
 import type { Mission, MissionDraft } from "../types/mission";
 
 export type MissionIdMap = Record<string, string>;
-export type SubmissionStatus = "draft" | "synced" | "completed";
+export type SubmissionStatus = "draft" | "synced" | "completed" | "approved";
+
+export interface TeamSubmissionStatus {
+  mission_id: string;
+  status: SubmissionStatus;
+  updated_at: string;
+}
 
 interface DbMission {
   id: string;
@@ -81,7 +87,37 @@ export async function saveMissionSubmission({
   return data;
 }
 
+export async function loadTeamSubmissionStatuses(teamId: string): Promise<TeamSubmissionStatus[]> {
+  if (!supabase) {
+    throw new Error("SUPABASE_NOT_CONFIGURED");
+  }
+
+  const { data, error } = await supabase
+    .from("submissions")
+    .select("mission_id,status,updated_at")
+    .eq("team_id", teamId);
+
+  if (error) {
+    throw error;
+  }
+
+  return (data ?? []) as TeamSubmissionStatus[];
+}
+
 function normalizeAnswer(draft: MissionDraft | undefined) {
+  const worldFriends =
+    draft?.worldFriends?.length
+      ? draft.worldFriends
+      : draft?.countryText || draft?.photoName
+        ? [
+            {
+              id: "legacy-1",
+              countryText: draft.countryText ?? "",
+              photoName: draft.photoName,
+            },
+          ]
+        : [];
+
   return {
     keyword: draft?.keyword ?? "",
     sentence: draft?.sentence ?? "",
@@ -90,6 +126,6 @@ function normalizeAnswer(draft: MissionDraft | undefined) {
     paleontology: draft?.paleontology ?? {},
     station_signs: draft?.stationSigns ?? [],
     country_text: draft?.countryText ?? "",
-    interview_completed: draft?.interviewCompleted ?? false,
+    world_friends: worldFriends,
   };
 }

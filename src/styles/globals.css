@@ -1,6 +1,6 @@
 :root {
   color: #17201b;
-  background: #f6f4ef;
+  background: #eadfc9;
   font-family: Inter, "Noto Sans TC", "Microsoft JhengHei", system-ui, sans-serif;
   line-height: 1.5;
 }
@@ -12,6 +12,23 @@
 body {
   margin: 0;
   min-width: 320px;
+  background:
+    linear-gradient(rgba(250, 245, 233, 0.82), rgba(236, 225, 204, 0.9)),
+    repeating-linear-gradient(90deg, rgba(62, 82, 74, 0.08) 0 1px, transparent 1px 78px),
+    repeating-linear-gradient(0deg, rgba(129, 96, 53, 0.07) 0 1px, transparent 1px 74px),
+    linear-gradient(135deg, #efe1c5 0%, #d7dfd1 44%, #f2e6cd 100%);
+  background-attachment: fixed;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(115deg, transparent 0 18%, rgba(104, 65, 38, 0.08) 18% 19%, transparent 19% 42%, rgba(20, 108, 99, 0.08) 42% 43%, transparent 43%),
+    repeating-linear-gradient(155deg, transparent 0 34px, rgba(78, 69, 55, 0.035) 34px 35px);
+  mix-blend-mode: multiply;
 }
 
 button,
@@ -65,7 +82,13 @@ label {
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  padding: 0.75rem 0;
+  margin: 0.35rem 0 0.8rem;
+  border: 1px solid rgba(83, 69, 49, 0.22);
+  border-radius: 8px;
+  background: rgba(255, 253, 248, 0.82);
+  box-shadow: 0 16px 40px rgba(45, 33, 20, 0.1);
+  padding: 0.75rem 0.9rem;
+  backdrop-filter: blur(10px);
 }
 
 .top-bar div:first-child {
@@ -89,12 +112,20 @@ label {
 .mode-switch button,
 .page-tabs button,
 .secondary-button,
-.listen-button {
+.listen-button,
+.danger-button {
   border: 1px solid #c8c1b4;
   border-radius: 8px;
   background: #fffdf8;
   color: #29362f;
   padding: 0.7rem 0.9rem;
+}
+
+.danger-button {
+  border-color: #b85d4c;
+  background: #fff4ef;
+  color: #8b2f23;
+  font-weight: 800;
 }
 
 .page-tabs {
@@ -125,14 +156,39 @@ label {
 .team-panel,
 .page-section,
 .mission-card {
-  border: 1px solid #ddd6ca;
+  border: 1px solid rgba(120, 99, 68, 0.28);
   border-radius: 8px;
-  background: #fffaf1;
+  background: rgba(255, 250, 241, 0.9);
+  box-shadow: 0 18px 45px rgba(56, 42, 26, 0.12);
   padding: 1rem;
+  backdrop-filter: blur(12px);
 }
 
 .hero-panel {
-  background: #eaf3ed;
+  position: relative;
+  overflow: hidden;
+  background:
+    linear-gradient(135deg, rgba(234, 243, 237, 0.94), rgba(255, 246, 225, 0.92)),
+    repeating-linear-gradient(90deg, transparent 0 58px, rgba(20, 108, 99, 0.06) 58px 59px);
+}
+
+.hero-panel > * {
+  position: relative;
+  z-index: 1;
+}
+
+.hero-panel::after {
+  content: "1899 · 1908 · 1947 · TODAY";
+  position: absolute;
+  right: 1rem;
+  bottom: 0.7rem;
+  color: rgba(100, 76, 43, 0.18);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(1.6rem, 6vw, 4rem);
+  font-weight: 800;
+  letter-spacing: 0;
+  white-space: nowrap;
+  z-index: 0;
 }
 
 .eyebrow {
@@ -217,7 +273,7 @@ p {
 .dashboard-grid article {
   border: 1px solid #e2dbcf;
   border-radius: 8px;
-  background: #fffdf8;
+  background: rgba(255, 253, 248, 0.9);
   padding: 0.8rem;
 }
 
@@ -263,7 +319,9 @@ p {
 }
 
 .highlight-card {
-  background: #f7efe1;
+  background:
+    linear-gradient(135deg, rgba(247, 239, 225, 0.94), rgba(232, 241, 235, 0.88)),
+    repeating-linear-gradient(0deg, transparent 0 42px, rgba(119, 89, 52, 0.05) 42px 43px);
 }
 
 .mission-title span,
@@ -301,7 +359,7 @@ mark {
 .teacher-record {
   border: 1px solid #e2dbcf;
   border-radius: 8px;
-  background: #fffdf8;
+  background: rgba(255, 253, 248, 0.92);
   padding: 0.85rem;
 }
 
@@ -351,6 +409,47 @@ mark {
 .teacher-record {
   display: grid;
   gap: 0.35rem;
+}
+
+.teacher-record-actions,
+.world-friend-entry-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.teacher-photo-preview {
+  width: min(100%, 420px);
+  max-height: 320px;
+  object-fit: contain;
+  border: 1px solid #d9cbb8;
+  border-radius: 8px;
+  background: #f5efe4;
+}
+
+.teacher-audio-preview {
+  width: min(100%, 420px);
+}
+
+.world-friend-list {
+  display: grid;
+  gap: 0.85rem;
+  margin-top: 1rem;
+}
+
+.world-friend-entry {
+  border: 1px solid rgba(120, 99, 68, 0.24);
+  border-radius: 8px;
+  background: rgba(255, 253, 248, 0.84);
+  padding: 0.85rem;
+}
+
+.world-friend-photo-note {
+  align-self: end;
+  margin: 0;
+  font-weight: 700;
 }
 
 .teacher-record pre {

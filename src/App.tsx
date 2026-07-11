@@ -12,17 +12,21 @@ import { uploadMissionMedia, type MediaType } from "./lib/mediaApi";
 import { speakEnglish } from "./lib/speech";
 import { isSupabaseConfigured } from "./lib/supabase";
 import {
+  loadTeamSubmissionStatuses,
   loadMissionIdMap,
   saveMissionSubmission,
   type MissionIdMap,
+  type SubmissionStatus,
 } from "./lib/submissionApi";
 import {
+  approveSubmission,
+  deleteTeamData,
   loadTeacherDashboard,
   registerTeacher,
   type TeacherDashboardData,
 } from "./lib/teacherApi";
 import { createTeam, loginTeam } from "./lib/teamApi";
-import type { Mission, MissionDraft, PageKey, SupabaseTeam, TeamDraft } from "./types/mission";
+import type { Mission, MissionDraft, PageKey, SupabaseTeam, TeamDraft, WorldFriendEntry } from "./types/mission";
 
 const pageOrder: PageKey[] = [
   "home",
@@ -55,6 +59,7 @@ export function App() {
   const [teacherStatus, setTeacherStatus] = useState("請輸入教師後台密碼。");
   const [teacherDashboardData, setTeacherDashboardData] = useState<TeacherDashboardData | null>(null);
   const [teacherLoading, setTeacherLoading] = useState(false);
+  const [teacherActionBusy, setTeacherActionBusy] = useState<string | null>(null);
   const [activePage, setActivePage] = useState<PageKey>("home");
   const [team, setTeam] = useState<TeamDraft>(() => loadTeam() ?? defaultTeam);
   const [connectedTeam, setConnectedTeam] = useState<SupabaseTeam | null>(() => loadConnectedTeam());
@@ -64,8 +69,10 @@ export function App() {
   const [teamActionBusy, setTeamActionBusy] = useState(false);
   const [missionIdMap, setMissionIdMap] = useState<MissionIdMap>({});
   const [missionSyncStatus, setMissionSyncStatus] = useState<Record<string, string>>({});
+  const [studentSubmissionStatuses, setStudentSubmissionStatuses] = useState<Record<string, SubmissionStatus>>({});
   const [savingMissionId, setSavingMissionId] = useState<string | null>(null);
   const [selectedFiles, setSelectedFiles] = useState<Record<string, Partial<Record<MediaType, File>>>>({});
+  const [worldFriendFiles, setWorldFriendFiles] = useState<Record<string, File>>({});
   const [drafts, setDrafts] = useState<Record<string, MissionDraft>>(() => loadDrafts());
   const [showChinese, setShowChinese] = useState<Record<PageKey, boolean>>({
     home: false,
@@ -93,7 +100,10 @@ export function App() {
     let cancelled = false;
     loadMissionIdMap(missions)
       .then((map) => {
-        if (!cancelled) setMissionIdMap(map);
+        if (!cancelled) {
+          setMissionIdMap(map);
+          void refreshStudentSubmissionStatuses(map);
+        }
       })
       .catch(() => {
         if (!cancelled) {
@@ -108,6 +118,30 @@ export function App() {
       cancelled = true;
     };
   }, [connectedTeam]);
+
+  async function refreshStudentSubmissionStatuses(map = missionIdMap) {
+    if (!connectedTeam || !isSupabaseConfigured) return;
+
+    try {
+      const rows = await loadTeamSubmissionStatuses(connectedTeam.id);
+      const localMissionByDbId = new Map(Object.entries(map).map(([localId, dbId]) => [dbId, localId]));
+      const nextStatuses: Record<string, SubmissionStatus> = {};
+
+      for (const row of rows) {
+        const localMissionId = localMissionByDbId.get(row.mission_id);
+        if (localMissionId) {
+          nextStatuses[localMissionId] = row.status;
+        }
+      }
+
+      setStudentSubmissionStatuses(nextStatuses);
+    } catch {
+      setMissionSyncStatus((current) => ({
+        ...current,
+        system: "暫時無法讀取審核狀態，作答仍可繼續保存。",
+      }));
+    }
+  }
 
   const page = contentPages.find((item) => item.key === activePage)!;
   const pageMissions = missions.filter((mission) => mission.pageKey === activePage);
@@ -135,6 +169,27 @@ export function App() {
     }));
 
     updateDraft(id, type === "photo" ? { photoName: file?.name } : { audioName: file?.name });
+  }
+
+  function selectWorldFriendPhoto(entryId: string, file: File | undefined) {
+    setWorldFriendFiles((current) => {
+      const next = { ...current };
+      if (file) {
+        next[entryId] = file;
+      } else {
+        delete next[entryId];
+      }
+      return next;
+    });
+
+    const entries = normalizeWorldFriendEntries(drafts["world-friend"]).map((entry) =>
+      entry.id === entryId ? { ...entry, photoName: file?.name } : entry,
+    );
+    updateDraft("world-friend", {
+      worldFriends: entries,
+      countryText: entries[0]?.countryText ?? "",
+      photoName: entries.map((entry) => entry.photoName).filter(Boolean).join("、"),
+    });
   }
 
   function updateMember(index: number, key: keyof TeamDraft["members"][number], value: string) {
@@ -230,7 +285,62 @@ export function App() {
     }
   }
 
+  async function handleApproveSubmission(submissionId: string) {
+    setTeacherActionBusy(`approve-${submissionId}`);
+    setTeacherStatus("正在標記審核通過...");
+    try {
+      await approveSubmission(submissionId);
+      const data = await loadTeacherDashboard();
+      setTeacherDashboardData(data);
+      setTeacherStatus("已標記審核通過。");
+    } catch (error) {
+      setTeacherStatus(toFriendlyTeacherError(error));
+    } finally {
+      setTeacherActionBusy(null);
+    }
+  }
+
+  async function handleDeleteTeamData(teamId: string, teamName: string) {
+    const confirmed = window.confirm(`確定要刪除「${teamName}」的隊伍、作答與上傳檔案嗎？這個動作無法復原。`);
+    if (!confirmed) return;
+
+    setTeacherActionBusy(`delete-${teamId}`);
+    setTeacherStatus(`正在刪除「${teamName}」資料...`);
+    try {
+      await deleteTeamData(teamId);
+      const data = await loadTeacherDashboard();
+      setTeacherDashboardData(data);
+      setTeacherStatus(`已刪除「${teamName}」的學生資料。`);
+    } catch (error) {
+      setTeacherStatus(toFriendlyTeacherError(error));
+    } finally {
+      setTeacherActionBusy(null);
+    }
+  }
+
   async function uploadSelectedMediaForMission(missionId: string, dbMissionId: string, teamId: string) {
+    if (missionId === "world-friend") {
+      const entries = normalizeWorldFriendEntries(drafts["world-friend"]);
+
+      for (const entry of entries) {
+        const file = worldFriendFiles[entry.id];
+        if (!file) continue;
+
+        setMissionSyncStatus((current) => ({
+          ...current,
+          [missionId]: `正在上傳第 ${entries.indexOf(entry) + 1} 組合照...`,
+        }));
+        await uploadMissionMedia({
+          teamId,
+          missionId: dbMissionId,
+          file,
+          type: "photo",
+        });
+      }
+
+      return;
+    }
+
     const files = selectedFiles[missionId] ?? {};
 
     if (files.photo) {
@@ -287,16 +397,23 @@ export function App() {
     try {
       const draft = drafts[mission.id];
       await uploadSelectedMediaForMission(mission.id, dbMissionId, connectedTeam.id);
-      await saveMissionSubmission({
+      const savedSubmission = await saveMissionSubmission({
         teamId: connectedTeam.id,
         missionId: dbMissionId,
         draft,
         status: isMissionComplete(mission, draft) ? "completed" : "synced",
       });
+      setStudentSubmissionStatuses((current) => ({
+        ...current,
+        [mission.id]: savedSubmission.status,
+      }));
       setSelectedFiles((current) => ({
         ...current,
         [mission.id]: {},
       }));
+      if (mission.id === "world-friend") {
+        setWorldFriendFiles({});
+      }
       setMissionSyncStatus((current) => ({
         ...current,
         [mission.id]: "已儲存到 Supabase submissions。",
@@ -357,6 +474,9 @@ export function App() {
             status={teacherStatus}
             loading={teacherLoading}
             onRefresh={refreshTeacherDashboard}
+            actionBusy={teacherActionBusy}
+            onApproveSubmission={handleApproveSubmission}
+            onDeleteTeamData={handleDeleteTeamData}
           />
         )}
       </main>
@@ -492,13 +612,16 @@ export function App() {
           <WorldFriendSection
             draft={drafts["world-friend"]}
             updateDraft={updateDraft}
-            onFileSelected={selectMissionFile}
+            onFileSelected={selectWorldFriendPhoto}
             onSave={() => handleSaveMission(missions.find((mission) => mission.id === "world-friend")!)}
             saveStatus={missionSyncStatus["world-friend"] ?? missionSyncStatus.system}
+            submissionStatus={studentSubmissionStatuses["world-friend"]}
             saveDisabled={!connectedTeam || savingMissionId === "world-friend"}
           />
         ) : null}
-        {activePage === "review_submit" ? <ReviewSection drafts={drafts} /> : null}
+        {activePage === "review_submit" ? (
+          <ReviewSection drafts={drafts} submissionStatuses={studentSubmissionStatuses} />
+        ) : null}
         {pageMissions
           .filter((mission) => mission.type !== "world_friend")
           .map((mission) => (
@@ -510,6 +633,7 @@ export function App() {
               onFileSelected={selectMissionFile}
               onSave={() => handleSaveMission(mission)}
               saveStatus={missionSyncStatus[mission.id] ?? missionSyncStatus.system}
+              submissionStatus={studentSubmissionStatuses[mission.id]}
               saveDisabled={!connectedTeam || savingMissionId === mission.id}
             />
           ))}
@@ -567,6 +691,7 @@ function MissionCard({
   onFileSelected,
   onSave,
   saveStatus,
+  submissionStatus,
   saveDisabled,
 }: {
   mission: Mission;
@@ -575,6 +700,7 @@ function MissionCard({
   onFileSelected: (id: string, type: MediaType, file: File | undefined) => void;
   onSave: () => void;
   saveStatus?: string;
+  submissionStatus?: SubmissionStatus;
   saveDisabled: boolean;
 }) {
   return (
@@ -584,7 +710,7 @@ function MissionCard({
           <h3>{mission.titleZh}</h3>
           <p>{mission.titleEn}</p>
         </div>
-        <span>{isMissionComplete(mission, draft) ? "已完成" : "草稿"}</span>
+        <span>{submissionStatus === "approved" ? "已審核通過" : isMissionComplete(mission, draft) ? "已完成" : "草稿"}</span>
       </div>
       <p>{mission.introEn}</p>
       <p className="muted">{mission.introZh}</p>
@@ -836,16 +962,27 @@ function WorldFriendSection({
   onFileSelected,
   onSave,
   saveStatus,
+  submissionStatus,
   saveDisabled,
 }: {
   draft?: MissionDraft;
   updateDraft: (id: string, patch: MissionDraft) => void;
-  onFileSelected: (id: string, type: MediaType, file: File | undefined) => void;
+  onFileSelected: (entryId: string, file: File | undefined) => void;
   onSave: () => void;
   saveStatus?: string;
+  submissionStatus?: SubmissionStatus;
   saveDisabled: boolean;
 }) {
   const [speechWarning, setSpeechWarning] = useState("");
+  const entries = normalizeWorldFriendEntries(draft);
+
+  function updateEntries(nextEntries: WorldFriendEntry[]) {
+    updateDraft("world-friend", {
+      worldFriends: nextEntries,
+      countryText: nextEntries[0]?.countryText ?? "",
+      photoName: nextEntries.map((entry) => entry.photoName).filter(Boolean).join("、"),
+    });
+  }
 
   return (
     <article className="mission-card highlight-card">
@@ -854,7 +991,9 @@ function WorldFriendSection({
           <h3>訪談句型</h3>
           <p>Interview Prompts</p>
         </div>
-        <span>{draft?.interviewCompleted && draft.countryText && draft.photoName ? "已完成" : "草稿"}</span>
+        <span>
+          {submissionStatus === "approved" ? "已審核通過" : hasCompletedWorldFriendEntry(draft) ? "已有紀錄" : "草稿"}
+        </span>
       </div>
       <div className="prompt-list">
         {interviewPrompts.map((prompt) => (
@@ -877,38 +1016,77 @@ function WorldFriendSection({
         ))}
       </div>
       {speechWarning ? <p className="warning-text">{speechWarning}</p> : null}
-      <div className="form-grid">
-        <label>
-          外國朋友的國家
-          <input
-            value={draft?.countryText ?? ""}
-            onChange={(event) => updateDraft("world-friend", { countryText: event.target.value })}
-            placeholder="自由輸入，例如：Japan"
-          />
-        </label>
-        <label>
-          合照照片
-          <input
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            onChange={(event) => onFileSelected("world-friend", "photo", event.target.files?.[0])}
-          />
-        </label>
-        <label className="checkbox-row">
-          <input
-            type="checkbox"
-            checked={draft?.interviewCompleted ?? false}
-            onChange={(event) => updateDraft("world-friend", { interviewCompleted: event.target.checked })}
-          />
-          已完成訪談 Interview completed
-        </label>
+      <div className="world-friend-list">
+        {entries.map((entry, index) => (
+          <div className="world-friend-entry" key={entry.id}>
+            <div className="world-friend-entry-title">
+              <strong>外國朋友第 {index + 1} 組</strong>
+              {entries.length > 1 ? (
+                <button
+                  className="danger-button"
+                  type="button"
+                  onClick={() => updateEntries(entries.filter((item) => item.id !== entry.id))}
+                >
+                  移除
+                </button>
+              ) : null}
+            </div>
+            <div className="form-grid">
+              <label>
+                外國朋友的國家
+                <input
+                  value={entry.countryText}
+                  onChange={(event) => {
+                    const next = entries.map((item) =>
+                      item.id === entry.id ? { ...item, countryText: event.target.value } : item,
+                    );
+                    updateEntries(next);
+                  }}
+                  placeholder="自由輸入，例如：Japan、USA、France"
+                />
+              </label>
+              <label>
+                合照照片
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  onChange={(event) => onFileSelected(entry.id, event.target.files?.[0])}
+                />
+              </label>
+              <p className="muted world-friend-photo-note">
+                {entry.photoName ? `已選擇：${entry.photoName}` : "遇到一組外國朋友，就在這裡新增並上傳一張合照。"}
+              </p>
+            </div>
+          </div>
+        ))}
+        <button
+          className="secondary-button"
+          type="button"
+          onClick={() =>
+            updateEntries([
+              ...entries,
+              {
+                id: createWorldFriendEntryId(),
+                countryText: "",
+              },
+            ])
+          }
+        >
+          新增一組外國朋友
+        </button>
       </div>
       <SubmissionActions onSave={onSave} saveStatus={saveStatus} saveDisabled={saveDisabled} />
     </article>
   );
 }
 
-function ReviewSection({ drafts }: { drafts: Record<string, MissionDraft> }) {
+function ReviewSection({
+  drafts,
+  submissionStatuses,
+}: {
+  drafts: Record<string, MissionDraft>;
+  submissionStatuses: Record<string, SubmissionStatus>;
+}) {
   return (
     <div className="review-list">
       {missions.map((mission) => (
@@ -917,7 +1095,13 @@ function ReviewSection({ drafts }: { drafts: Record<string, MissionDraft> }) {
             <strong>{mission.titleZh}</strong>
             <span>{mission.titleEn}</span>
           </div>
-          <mark>{isMissionComplete(mission, drafts[mission.id]) ? "已完成" : "尚有缺漏"}</mark>
+          <mark>
+            {submissionStatuses[mission.id] === "approved"
+              ? "老師已審核通過"
+              : isMissionComplete(mission, drafts[mission.id])
+                ? "已完成"
+                : "尚有缺漏"}
+          </mark>
         </div>
       ))}
       <button className="primary-button">送出成果 Submit</button>
@@ -930,11 +1114,17 @@ function TeacherSupabaseDashboard({
   status,
   loading,
   onRefresh,
+  actionBusy,
+  onApproveSubmission,
+  onDeleteTeamData,
 }: {
   data: TeacherDashboardData | null;
   status: string;
   loading: boolean;
   onRefresh: () => void;
+  actionBusy: string | null;
+  onApproveSubmission: (submissionId: string) => void;
+  onDeleteTeamData: (teamId: string, teamName: string) => void;
 }) {
   const [selectedMissionId, setSelectedMissionId] = useState("all");
   const [collapsedTeamIds, setCollapsedTeamIds] = useState<Record<string, boolean>>({});
@@ -1043,6 +1233,13 @@ function TeacherSupabaseDashboard({
                 <div className="teacher-card-actions">
                   <span className="status-pill">{teamItem.locked ? "已鎖定" : "進行中"}</span>
                   <button
+                    className="danger-button"
+                    disabled={actionBusy === `delete-${teamItem.id}`}
+                    onClick={() => onDeleteTeamData(teamItem.id, teamItem.team_name)}
+                  >
+                    刪除本組資料
+                  </button>
+                  <button
                     className="secondary-button"
                     onClick={() =>
                       setCollapsedTeamIds((current) => ({
@@ -1072,6 +1269,16 @@ function TeacherSupabaseDashboard({
                           <div className="teacher-record" key={submission.id}>
                             <strong>{mission?.name_zh ?? "未命名關卡"}</strong>
                             <span>{mission?.name_en ?? submission.mission_id}</span>
+                            <div className="teacher-record-actions">
+                              <span className="status-pill">{formatSubmissionStatus(submission.status)}</span>
+                              <button
+                                className="secondary-button"
+                                disabled={submission.status === "approved" || actionBusy === `approve-${submission.id}`}
+                                onClick={() => onApproveSubmission(submission.id)}
+                              >
+                                {submission.status === "approved" ? "已通過" : "審核通過"}
+                              </button>
+                            </div>
                             <pre>{formatAnswerJson(submission.answer_json)}</pre>
                           </div>
                         );
@@ -1091,9 +1298,20 @@ function TeacherSupabaseDashboard({
                             <strong>{file.type === "photo" ? "照片" : "錄音"}：{mission?.name_zh ?? "未指定關卡"}</strong>
                             <span>{file.mime_type ?? "unknown"}，{formatFileSize(file.file_size)}</span>
                             {file.signed_url ? (
-                              <a href={file.signed_url} target="_blank" rel="noreferrer">
-                                開啟檔案
-                              </a>
+                              <>
+                                {file.type === "photo" ? (
+                                  <img className="teacher-photo-preview" src={file.signed_url} alt="學生上傳照片" />
+                                ) : (
+                                  <audio className="teacher-audio-preview" controls src={file.signed_url}>
+                                    <a href={file.signed_url} target="_blank" rel="noreferrer">
+                                      開啟錄音檔案
+                                    </a>
+                                  </audio>
+                                )}
+                                <a href={file.signed_url} target="_blank" rel="noreferrer">
+                                  開啟檔案
+                                </a>
+                              </>
                             ) : (
                               <span>暫時無法產生檔案連結</span>
                             )}
@@ -1246,13 +1464,30 @@ function formatAnswerJson(answer: Record<string, unknown>) {
   const lines = [
     answer.keyword ? `核心單字：${answer.keyword}` : "",
     answer.sentence ? `英文句子：${answer.sentence}` : "",
-    answer.country_text ? `外國朋友國家：${answer.country_text}` : "",
-    answer.interview_completed ? "訪談狀態：已完成" : "",
+    formatWorldFriendsAnswer(answer),
     formatObjectAnswer("古生物資料", answer.paleontology),
     formatObjectAnswer("車站標示", answer.station_signs),
   ].filter(Boolean);
 
   return lines.length ? lines.join("\n") : JSON.stringify(answer, null, 2);
+}
+
+function formatWorldFriendsAnswer(answer: Record<string, unknown>) {
+  const worldFriends = Array.isArray(answer.world_friends) ? answer.world_friends : [];
+  if (worldFriends.length) {
+    return worldFriends
+      .map((item, index) => {
+        if (!item || typeof item !== "object") return "";
+        const record = item as Record<string, unknown>;
+        const country = String(record.countryText ?? record.country_text ?? "").trim() || "未填國家";
+        const photoName = String(record.photoName ?? record.photo_name ?? "").trim();
+        return `外國朋友第 ${index + 1} 組：${country}${photoName ? `（照片：${photoName}）` : ""}`;
+      })
+      .filter(Boolean)
+      .join("\n");
+  }
+
+  return answer.country_text ? `外國朋友國家：${answer.country_text}` : "";
 }
 
 function formatObjectAnswer(label: string, value: unknown) {
@@ -1266,6 +1501,13 @@ function formatFileSize(size: number | null) {
   if (!size) return "未知大小";
   if (size < 1024 * 1024) return `${Math.round(size / 1024)} KB`;
   return `${(size / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function formatSubmissionStatus(status: string) {
+  if (status === "approved") return "老師已審核通過";
+  if (status === "completed") return "學生已完成";
+  if (status === "synced") return "已儲存";
+  return "草稿";
 }
 
 function isMissionComplete(mission: Mission, draft?: MissionDraft) {
@@ -1283,9 +1525,38 @@ function isMissionComplete(mission: Mission, draft?: MissionDraft) {
     );
   }
   if (mission.type === "world_friend") {
-    return Boolean(draft.countryText && draft.photoName && draft.interviewCompleted);
+    return hasCompletedWorldFriendEntry(draft);
   }
   return true;
+}
+
+function hasCompletedWorldFriendEntry(draft?: MissionDraft) {
+  return normalizeWorldFriendEntries(draft).some((entry) => entry.countryText.trim() && entry.photoName);
+}
+
+function normalizeWorldFriendEntries(draft?: MissionDraft): WorldFriendEntry[] {
+  if (draft?.worldFriends?.length) {
+    return draft.worldFriends.map((entry) => ({
+      id: entry.id || createWorldFriendEntryId(),
+      countryText: entry.countryText ?? "",
+      photoName: entry.photoName,
+    }));
+  }
+
+  return [
+    {
+      id: "world-friend-1",
+      countryText: draft?.countryText ?? "",
+      photoName: draft?.photoName,
+    },
+  ];
+}
+
+function createWorldFriendEntryId() {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
+  }
+  return `world-friend-${Date.now()}-${Math.round(Math.random() * 100000)}`;
 }
 
 function toFriendlySubmissionError(error: unknown) {

@@ -123,6 +123,34 @@ export async function loadTeacherDashboard(): Promise<TeacherDashboardData> {
   };
 }
 
+export async function approveSubmission(submissionId: string): Promise<void> {
+  if (!supabase) {
+    throw new Error("SUPABASE_NOT_CONFIGURED");
+  }
+
+  const { error } = await supabase.rpc("approve_submission", {
+    p_submission_id: submissionId,
+  });
+
+  if (error) {
+    throw error;
+  }
+}
+
+export async function deleteTeamData(teamId: string): Promise<void> {
+  if (!supabase) {
+    throw new Error("SUPABASE_NOT_CONFIGURED");
+  }
+
+  const { error } = await supabase.rpc("delete_team_data", {
+    p_team_id: teamId,
+  });
+
+  if (error) {
+    throw error;
+  }
+}
+
 async function ensureAuthenticatedSession() {
   if (!supabase) {
     throw new Error("SUPABASE_NOT_CONFIGURED");

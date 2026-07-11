@@ -73,6 +73,7 @@ export interface MissionDraft {
   paleontology?: Record<string, string>;
   countryText?: string;
   interviewCompleted?: boolean;
+  worldFriends?: WorldFriendEntry[];
 }
 
 export interface StationSign {
@@ -80,4 +81,10 @@ export interface StationSign {
   chinese: string;
   purpose: string;
   location: string;
+}
+
+export interface WorldFriendEntry {
+  id: string;
+  countryText: string;
+  photoName?: string;
 }

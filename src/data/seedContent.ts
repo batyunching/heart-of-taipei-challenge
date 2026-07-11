@@ -168,9 +168,16 @@ export const missions: Mission[] = [
     titleZh: "臺北車站英文標示探索",
     titleEn: "Taipei Main Station English Sign Hunt",
     introEn:
-      "Find at least six English signs. Record the English, Chinese, purpose, and location.",
-    introZh: "尋找至少六個英文標示，記錄英文、中文、用途與位置。",
-    keywords: ["Transportation", "Direction", "Service", "Safety"],
+      "Photograph five bilingual signs with different functions. Record the English, Chinese, and function of each sign.",
+    introZh:
+      "請拍攝五種不同功能的雙語指標，例如位置說明、方向引導、機器操作、到站離站資訊、服務或安全提醒，並記錄英文、中文與功能。",
+    keywords: [
+      "Location information",
+      "Direction guidance",
+      "Machine operation",
+      "Arrival / departure information",
+      "Service / safety",
+    ],
     requiredMedia: "photo",
   },
   {

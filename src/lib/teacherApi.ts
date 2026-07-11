@@ -186,6 +186,20 @@ export async function approveMediaFile(mediaFileId: string): Promise<void> {
   }
 }
 
+export async function deleteMediaFile(mediaFileId: string): Promise<void> {
+  if (!supabase) {
+    throw new Error("SUPABASE_NOT_CONFIGURED");
+  }
+
+  const { error } = await supabase.rpc("delete_media_file", {
+    p_media_file_id: mediaFileId,
+  });
+
+  if (error) {
+    throw error;
+  }
+}
+
 export async function deleteTeamData(teamId: string): Promise<void> {
   if (!supabase) {
     throw new Error("SUPABASE_NOT_CONFIGURED");

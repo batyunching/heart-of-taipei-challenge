@@ -21,6 +21,7 @@ import {
 import {
   approveMediaFile,
   approveSubmission,
+  deleteMediaFile,
   deleteSubmission,
   deleteTeamData,
   loadTeacherDashboard,
@@ -335,6 +336,24 @@ export function App() {
     }
   }
 
+  async function handleDeleteMediaFile(mediaFileId: string, mediaLabel: string) {
+    const confirmed = window.confirm(`確定要刪除這個「${mediaLabel}」檔案嗎？這個動作無法復原。`);
+    if (!confirmed) return;
+
+    setTeacherActionBusy(`delete-media-${mediaFileId}`);
+    setTeacherStatus("正在刪除上傳檔案...");
+    try {
+      await deleteMediaFile(mediaFileId);
+      const data = await loadTeacherDashboard();
+      setTeacherDashboardData(data);
+      setTeacherStatus("已刪除上傳檔案。");
+    } catch (error) {
+      setTeacherStatus(toFriendlyTeacherError(error));
+    } finally {
+      setTeacherActionBusy(null);
+    }
+  }
+
   async function handleDeleteTeamData(teamId: string, teamName: string) {
     const confirmed = window.confirm(`確定要刪除「${teamName}」的隊伍、作答與上傳檔案嗎？這個動作無法復原。`);
     if (!confirmed) return;
@@ -513,6 +532,7 @@ export function App() {
             onApproveSubmission={handleApproveSubmission}
             onDeleteSubmission={handleDeleteSubmission}
             onApproveMediaFile={handleApproveMediaFile}
+            onDeleteMediaFile={handleDeleteMediaFile}
             onDeleteTeamData={handleDeleteTeamData}
           />
         )}
@@ -721,6 +741,45 @@ function HomeCards() {
   );
 }
 
+const keywordTranslations: Record<string, string> = {
+  history: "歷史",
+  memory: "記憶",
+  park: "公園",
+  monument: "紀念碑",
+  public: "公共的",
+  city: "城市",
+  peace: "和平",
+  observe: "觀察",
+  reflection: "反思",
+  museum: "博物館",
+  object: "物件／文物",
+  exhibition: "展覽",
+  display: "展示",
+  collection: "典藏",
+  culture: "文化",
+  visitor: "訪客",
+  learn: "學習",
+  Regulatory: "規範類",
+  Informational: "資訊類",
+  Safety: "安全類",
+  Exhibition: "展覽類",
+  fossil: "化石",
+  prehistoric: "史前的",
+  animal: "動物",
+  "Location information": "位置說明",
+  "Direction guidance": "方向引導",
+  "Machine operation": "機器操作",
+  "Arrival / departure information": "到站／離站資訊",
+  "Service / safety": "服務／安全",
+  interview: "訪談",
+  country: "國家",
+  photo: "照片",
+};
+
+function getKeywordZh(keyword: string) {
+  return keywordTranslations[keyword] ?? "中文輔助";
+}
+
 function MissionCard({
   mission,
   draft,
@@ -740,6 +799,8 @@ function MissionCard({
   submissionStatus?: SubmissionStatus;
   saveDisabled: boolean;
 }) {
+  const [showMissionChinese, setShowMissionChinese] = useState(false);
+
   return (
     <article className="mission-card">
       <div className="mission-title">
@@ -750,13 +811,30 @@ function MissionCard({
         <span>{submissionStatus === "approved" ? "已審核通過" : isMissionComplete(mission, draft) ? "已完成" : "草稿"}</span>
       </div>
       <p>{mission.introEn}</p>
-      <p className="muted">{mission.introZh}</p>
+      <button
+        className="inline-help-button"
+        type="button"
+        onClick={() => setShowMissionChinese((current) => !current)}
+      >
+        {showMissionChinese ? "隱藏中文輔助" : "顯示中文輔助"}
+      </button>
+      {showMissionChinese ? <p className="intro-zh mission-zh-help">{mission.introZh}</p> : null}
       <div className="keyword-row">
-        {mission.keywords.map((keyword) => <span key={keyword}>{keyword}</span>)}
+        {mission.keywords.map((keyword) => (
+          <span key={keyword}>
+            {keyword}
+            {showMissionChinese ? <small>{getKeywordZh(keyword)}</small> : null}
+          </span>
+        ))}
       </div>
 
       {mission.type === "info_card" ? (
-        <MuseumEnglishCards missionId={mission.id} draft={draft} updateDraft={updateDraft} />
+        <MuseumEnglishCards
+          missionId={mission.id}
+          draft={draft}
+          updateDraft={updateDraft}
+          showChinese={showMissionChinese}
+        />
       ) : null}
       {mission.type === "audio" ? (
         <PaleontologyFields
@@ -764,6 +842,7 @@ function MissionCard({
           draft={draft}
           updateDraft={updateDraft}
           onFileSelected={onFileSelected}
+          showChinese={showMissionChinese}
         />
       ) : null}
       {mission.type === "station_sign" ? (
@@ -772,6 +851,7 @@ function MissionCard({
           draft={draft}
           updateDraft={updateDraft}
           onFileSelected={onFileSelected}
+          showChinese={showMissionChinese}
         />
       ) : null}
       {mission.type === "photo_text" ? (
@@ -852,26 +932,29 @@ function PaleontologyFields({
   draft,
   updateDraft,
   onFileSelected,
+  showChinese,
 }: {
   missionId: string;
   draft?: MissionDraft;
   updateDraft: (id: string, patch: MissionDraft) => void;
   onFileSelected: (id: string, type: MediaType, file: File | undefined) => void;
+  showChinese: boolean;
 }) {
   const value = draft?.paleontology ?? {};
   const fields = [
-    ["name", "name"],
-    ["type", "fossil or prehistoric animal"],
-    ["lived", "when it lived"],
-    ["ate", "what it ate"],
-    ["fact", "interesting fact"],
+    ["name", "name", "名稱"],
+    ["type", "fossil or prehistoric animal", "化石或史前動物種類"],
+    ["lived", "when it lived", "牠生活的年代"],
+    ["ate", "what it ate", "牠吃什麼"],
+    ["fact", "interesting fact", "有趣的特色或知識"],
   ];
 
   return (
     <div className="form-grid">
-      {fields.map(([key, label]) => (
+      {fields.map(([key, label, labelZh]) => (
         <label key={key}>
           {label}
+          {showChinese ? <small>{labelZh}</small> : null}
           <input
             value={value[key] ?? ""}
             onChange={(event) =>
@@ -883,12 +966,17 @@ function PaleontologyFields({
       <div className="sentence-box">
         <strong>錄音句型</strong>
         <p>This is a ____.</p>
+        {showChinese ? <small>這是 ____。</small> : null}
         <p>It lived ____.</p>
+        {showChinese ? <small>牠生活在 ____。</small> : null}
         <p>It ate ____.</p>
+        {showChinese ? <small>牠吃 ____。</small> : null}
         <p>One interesting fact is ____.</p>
+        {showChinese ? <small>一個有趣的特色是 ____。</small> : null}
       </div>
       <label>
         錄音檔
+        {showChinese ? <small>請上傳英文介紹錄音。</small> : null}
         <input
           type="file"
           accept="audio/webm,audio/mp4,audio/mpeg,audio/x-m4a"
@@ -904,21 +992,41 @@ function StationSigns({
   draft,
   updateDraft,
   onFileSelected,
+  showChinese,
 }: {
   missionId: string;
   draft?: MissionDraft;
   updateDraft: (id: string, patch: MissionDraft) => void;
   onFileSelected: (id: string, type: MediaType, file: File | undefined) => void;
+  showChinese: boolean;
 }) {
-  const signs = draft?.stationSigns ?? Array.from({ length: 6 }, () => ({
+  const stationPurposeOptions = [
+    "Location information",
+    "Direction guidance",
+    "Machine operation",
+    "Arrival / departure information",
+    "Service / safety",
+  ];
+  const signs = Array.from({ length: 5 }, (_, index) => ({
     english: "",
     chinese: "",
-    purpose: "Transportation",
+    purpose: stationPurposeOptions[index],
     location: "",
+    ...(draft?.stationSigns?.[index] ?? {}),
   }));
 
   return (
     <div className="sign-list">
+      <div className="mission-direction-box">
+        <strong>Photo mission</strong>
+        <p>
+          Take photos of five bilingual signs with different functions: location information,
+          direction guidance, machine operation, arrival or departure information, and service or safety.
+        </p>
+        {showChinese ? (
+          <p>請拍五種不同功能的雙語指標：位置說明、方向引導、機器操作、到站或離站資訊、服務或安全提醒。</p>
+        ) : null}
+      </div>
       {signs.map((sign, index) => (
         <div className="sign-row" key={index}>
           <input
@@ -947,24 +1055,16 @@ function StationSigns({
               updateDraft(missionId, { stationSigns: next });
             }}
           >
-            <option>Transportation</option>
-            <option>Direction</option>
-            <option>Service</option>
-            <option>Safety</option>
+            {stationPurposeOptions.map((option) => (
+              <option key={option}>{option}</option>
+            ))}
           </select>
-          <input
-            value={sign.location}
-            onChange={(event) => {
-              const next = [...signs];
-              next[index] = { ...sign, location: event.target.value };
-              updateDraft(missionId, { stationSigns: next });
-            }}
-            placeholder="位置"
-          />
+          {showChinese ? <span className="purpose-zh">{getKeywordZh(sign.purpose)}</span> : null}
         </div>
       ))}
       <label>
         任務照片
+        {showChinese ? <small>請上傳能看出五種雙語指標任務的照片。</small> : null}
         <input
           type="file"
           accept="image/jpeg,image/png,image/webp"
@@ -979,16 +1079,18 @@ function MuseumEnglishCards({
   missionId,
   draft,
   updateDraft,
+  showChinese,
 }: {
   missionId: string;
   draft?: MissionDraft;
   updateDraft: (id: string, patch: MissionDraft) => void;
+  showChinese: boolean;
 }) {
   const cards = [
-    ["regulatory", "Regulatory", "Rules or instructions visitors should follow.", "No flash photography."],
-    ["informational", "Informational", "Helpful facts and visitor information.", "Information desk."],
-    ["safety", "Safety", "Signs that protect visitors.", "Emergency exit."],
-    ["exhibition", "Exhibition", "Words used in displays.", "Permanent exhibition."],
+    ["regulatory", "Regulatory", "規範類", "Rules or instructions visitors should follow.", "No flash photography.", "參觀者需要遵守的規則或指示。"],
+    ["informational", "Informational", "資訊類", "Helpful facts and visitor information.", "Information desk.", "提供參觀資訊、服務或事實說明。"],
+    ["safety", "Safety", "安全類", "Signs that protect visitors.", "Emergency exit.", "提醒安全、逃生或保護參觀者的標示。"],
+    ["exhibition", "Exhibition", "展覽類", "Words used in displays.", "Permanent exhibition.", "展場、展品說明或展示分類常見用語。"],
   ];
 
   const categories = normalizeMuseumCategories(draft);
@@ -1003,10 +1105,12 @@ function MuseumEnglishCards({
 
   return (
     <div className="info-card-grid">
-      {cards.map(([categoryId, title, use, example]) => (
+      {cards.map(([categoryId, title, titleZh, use, example, useZh]) => (
         <article className="info-card museum-category-card" key={categoryId}>
           <strong>{title}</strong>
+          {showChinese ? <small>{titleZh}</small> : null}
           <p>{use}</p>
+          {showChinese ? <p className="muted">{useZh}</p> : null}
           <span>{example}</span>
           <div className="museum-entry-list">
             {categories[categoryId].map((entry, index) => (
@@ -1193,6 +1297,7 @@ function TeacherSupabaseDashboard({
   onApproveSubmission,
   onDeleteSubmission,
   onApproveMediaFile,
+  onDeleteMediaFile,
   onDeleteTeamData,
 }: {
   data: TeacherDashboardData | null;
@@ -1203,6 +1308,7 @@ function TeacherSupabaseDashboard({
   onApproveSubmission: (submissionId: string) => void;
   onDeleteSubmission: (submissionId: string, missionName: string) => void;
   onApproveMediaFile: (mediaFileId: string) => void;
+  onDeleteMediaFile: (mediaFileId: string, mediaLabel: string) => void;
   onDeleteTeamData: (teamId: string, teamName: string) => void;
 }) {
   const [selectedMissionId, setSelectedMissionId] = useState("all");
@@ -1382,22 +1488,36 @@ function TeacherSupabaseDashboard({
                     <div className="teacher-record-list">
                       {teamMediaFiles.map((file) => {
                         const mission = data.missions.find((item) => item.id === file.mission_id);
+                        const mediaLabel = file.type === "photo" ? "照片" : "錄音";
                         return (
                           <div className="teacher-record" key={file.id}>
-                            <strong>{file.type === "photo" ? "照片" : "錄音"}：{mission?.name_zh ?? "未指定關卡"}</strong>
+                            <strong>{mediaLabel}：{mission?.name_zh ?? "未指定關卡"}</strong>
                             <span>{file.mime_type ?? "unknown"}，{formatFileSize(file.file_size)}</span>
-                            {file.type === "photo" ? (
-                              <div className="teacher-record-actions">
+                            <div className="teacher-record-actions">
+                              {file.type === "photo" ? (
                                 <span className="status-pill">{formatMediaReviewStatus(file.review_status)}</span>
+                              ) : (
+                                <span className="status-pill">錄音檔</span>
+                              )}
+                              <div className="teacher-inline-actions">
+                                {file.type === "photo" ? (
+                                  <button
+                                    className="secondary-button"
+                                    disabled={file.review_status === "approved" || actionBusy === `approve-media-${file.id}`}
+                                    onClick={() => onApproveMediaFile(file.id)}
+                                  >
+                                    {file.review_status === "approved" ? "照片已通過" : "照片審核通過"}
+                                  </button>
+                                ) : null}
                                 <button
-                                  className="secondary-button"
-                                  disabled={file.review_status === "approved" || actionBusy === `approve-media-${file.id}`}
-                                  onClick={() => onApproveMediaFile(file.id)}
+                                  className="danger-button"
+                                  disabled={actionBusy === `delete-media-${file.id}`}
+                                  onClick={() => onDeleteMediaFile(file.id, mediaLabel)}
                                 >
-                                  {file.review_status === "approved" ? "照片已通過" : "照片審核通過"}
+                                  刪除檔案
                                 </button>
                               </div>
-                            ) : null}
+                            </div>
                             {file.signed_url ? (
                               <>
                                 {file.type === "photo" ? (
@@ -1659,7 +1779,7 @@ function isMissionComplete(mission: Mission, draft?: MissionDraft) {
   if (mission.type === "station_sign") {
     return Boolean(
       draft.photoName &&
-        (draft.stationSigns ?? []).filter((sign) => sign.english && sign.chinese && sign.location).length >= 6,
+        (draft.stationSigns ?? []).filter((sign) => sign.english && sign.chinese && sign.purpose).length >= 5,
     );
   }
   if (mission.type === "world_friend") {

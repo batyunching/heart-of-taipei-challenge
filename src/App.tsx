@@ -394,6 +394,31 @@ export function App() {
     }
   }
 
+  async function handleApproveTeamScoreItems(teamId: string, teamName: string, scoreItemIds: string[]) {
+    if (!scoreItemIds.length) {
+      setTeacherStatus(`「${teamName}」目前沒有需要批次審核通過的得分項目。`);
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `確定要將「${teamName}」目前畫面中的 ${scoreItemIds.length} 個待審核或退回得分項目全部審核通過嗎？`,
+    );
+    if (!confirmed) return;
+
+    setTeacherActionBusy(`approve-team-${teamId}`);
+    setTeacherStatus(`正在批次審核通過「${teamName}」的得分項目...`);
+    try {
+      await Promise.all(scoreItemIds.map((scoreItemId) => approveScoreItem(scoreItemId)));
+      const data = await loadTeacherDashboard();
+      setTeacherDashboardData(data);
+      setTeacherStatus(`已批次審核通過「${teamName}」的 ${scoreItemIds.length} 個得分項目。`);
+    } catch (error) {
+      setTeacherStatus(toFriendlyTeacherError(error));
+    } finally {
+      setTeacherActionBusy(null);
+    }
+  }
+
   async function handleRejectScoreItem(scoreItemId: string, label: string) {
     const note = window.prompt(`請輸入「${label}」退回原因，可留空。`);
     if (note === null) return;
@@ -655,6 +680,7 @@ export function App() {
             onDeleteSubmission={handleDeleteSubmission}
             onApproveMediaFile={handleApproveMediaFile}
             onApproveScoreItem={handleApproveScoreItem}
+            onApproveTeamScoreItems={handleApproveTeamScoreItems}
             onRejectScoreItem={handleRejectScoreItem}
             onResetScoreItem={handleResetScoreItem}
             onDeleteMediaFile={handleDeleteMediaFile}
@@ -1444,6 +1470,7 @@ function TeacherSupabaseDashboard({
   onDeleteSubmission,
   onApproveMediaFile,
   onApproveScoreItem,
+  onApproveTeamScoreItems,
   onRejectScoreItem,
   onResetScoreItem,
   onDeleteMediaFile,
@@ -1458,6 +1485,7 @@ function TeacherSupabaseDashboard({
   onDeleteSubmission: (submissionId: string, missionName: string) => void;
   onApproveMediaFile: (mediaFileId: string) => void;
   onApproveScoreItem: (scoreItemId: string) => void;
+  onApproveTeamScoreItems: (teamId: string, teamName: string, scoreItemIds: string[]) => void;
   onRejectScoreItem: (scoreItemId: string, label: string) => void;
   onResetScoreItem: (scoreItemId: string, label: string) => void;
   onDeleteMediaFile: (mediaFileId: string, mediaLabel: string) => void;
@@ -1574,6 +1602,9 @@ function TeacherSupabaseDashboard({
         {data.teams.map((teamItem) => {
           const teamSubmissions = filteredSubmissions.filter((submission) => submission.team_id === teamItem.id);
           const teamMediaFiles = filteredMediaFiles.filter((file) => file.team_id === teamItem.id);
+          const teamBatchScoreItems = filteredScoreItems.filter(
+            (item) => item.team_id === teamItem.id && item.review_status !== "approved",
+          );
           const teamScore = scoreboardByTeam.get(teamItem.id);
           const isExpanded = !collapsedTeamIds[teamItem.id];
 
@@ -1588,6 +1619,19 @@ function TeacherSupabaseDashboard({
                 </div>
                 <div className="teacher-card-actions">
                   <span className="status-pill">{teamItem.locked ? "已鎖定" : "進行中"}</span>
+                  <button
+                    className="primary-button"
+                    disabled={teamBatchScoreItems.length === 0 || actionBusy === `approve-team-${teamItem.id}`}
+                    onClick={() =>
+                      onApproveTeamScoreItems(
+                        teamItem.id,
+                        teamItem.team_name,
+                        teamBatchScoreItems.map((item) => item.id),
+                      )
+                    }
+                  >
+                    本組批次通過 {teamBatchScoreItems.length ? `(${teamBatchScoreItems.length})` : ""}
+                  </button>
                   <button
                     className="danger-button"
                     disabled={actionBusy === `delete-${teamItem.id}`}

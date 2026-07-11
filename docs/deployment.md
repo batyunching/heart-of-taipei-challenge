@@ -65,7 +65,7 @@ VITE_SUPABASE_ANON_KEY
 可選新增：
 
 ```text
-GITHUB_PAGES_BASE
+PAGES_BASE
 ```
 
 建議值：

@@ -1,0 +1,418 @@
+:root {
+  color: #17201b;
+  background: #f6f4ef;
+  font-family: Inter, "Noto Sans TC", "Microsoft JhengHei", system-ui, sans-serif;
+  line-height: 1.5;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button {
+  min-height: 44px;
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+input,
+select,
+textarea {
+  width: 100%;
+  border: 1px solid #c8c1b4;
+  border-radius: 8px;
+  background: #fffdf8;
+  color: #17201b;
+  padding: 0.75rem;
+}
+
+textarea {
+  min-height: 96px;
+  resize: vertical;
+}
+
+label {
+  display: grid;
+  gap: 0.4rem;
+  color: #415047;
+  font-weight: 700;
+}
+
+.app-shell {
+  width: min(1120px, 100%);
+  margin: 0 auto;
+  padding: 1rem;
+}
+
+.top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 0;
+}
+
+.top-bar div:first-child {
+  display: grid;
+}
+
+.top-bar span,
+.muted,
+.review-row span,
+.dashboard-grid span {
+  color: #66736b;
+}
+
+.mode-switch,
+.page-tabs {
+  display: flex;
+  gap: 0.5rem;
+  overflow-x: auto;
+}
+
+.mode-switch button,
+.page-tabs button,
+.secondary-button,
+.listen-button {
+  border: 1px solid #c8c1b4;
+  border-radius: 8px;
+  background: #fffdf8;
+  color: #29362f;
+  padding: 0.7rem 0.9rem;
+}
+
+.page-tabs {
+  margin: 1rem 0;
+  padding-bottom: 0.25rem;
+}
+
+.page-tabs button {
+  min-width: 150px;
+  display: grid;
+  text-align: left;
+}
+
+.tab-active,
+.primary-button {
+  border: 0;
+  background: #146c63 !important;
+  color: white !important;
+}
+
+.primary-button {
+  border-radius: 8px;
+  padding: 0.8rem 1.1rem;
+  font-weight: 800;
+}
+
+.hero-panel,
+.team-panel,
+.page-section,
+.mission-card {
+  border: 1px solid #ddd6ca;
+  border-radius: 8px;
+  background: #fffaf1;
+  padding: 1rem;
+}
+
+.hero-panel {
+  background: #eaf3ed;
+}
+
+.eyebrow {
+  margin: 0 0 0.35rem;
+  color: #146c63;
+  font-size: 0.8rem;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+h1,
+h2,
+h3,
+p {
+  margin-top: 0;
+}
+
+.status-grid,
+.team-grid,
+.form-grid,
+.dashboard-grid {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.status-grid {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.status-grid span,
+.status-pill,
+.keyword-row span,
+.venue-card,
+.sentence-box {
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 0.7rem;
+}
+
+.team-panel,
+.page-section {
+  margin-top: 1rem;
+}
+
+.team-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.mission-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.mission-actions span {
+  color: #146c63;
+  font-weight: 800;
+}
+
+.team-grid,
+.dashboard-grid {
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+}
+
+.member-grid {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  margin-top: 1rem;
+}
+
+.member-card,
+.info-card,
+.prompt-card,
+.review-row,
+.dashboard-grid article {
+  border: 1px solid #e2dbcf;
+  border-radius: 8px;
+  background: #fffdf8;
+  padding: 0.8rem;
+}
+
+.member-card {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.section-heading,
+.mission-title,
+.review-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.intro-text {
+  font-size: 1.05rem;
+}
+
+.intro-zh {
+  border-left: 4px solid #146c63;
+  background: #eef5f2;
+  padding: 0.75rem;
+}
+
+.venue-grid,
+.info-card-grid {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.venue-card {
+  display: grid;
+  gap: 0.3rem;
+  border: 1px solid #e2dbcf;
+}
+
+.mission-card {
+  margin-top: 1rem;
+}
+
+.highlight-card {
+  background: #f7efe1;
+}
+
+.mission-title span,
+.status-pill,
+mark {
+  border-radius: 999px;
+  background: #dfece6;
+  color: #146c63;
+  padding: 0.35rem 0.65rem;
+  font-weight: 900;
+}
+
+.keyword-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.form-grid {
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  margin-top: 1rem;
+}
+
+.sign-list,
+.prompt-list,
+.review-list,
+.teacher-team-list,
+.teacher-record-list {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.teacher-team-card,
+.teacher-record {
+  border: 1px solid #e2dbcf;
+  border-radius: 8px;
+  background: #fffdf8;
+  padding: 0.85rem;
+}
+
+.teacher-team-card h2,
+.teacher-team-card h3 {
+  margin-bottom: 0.4rem;
+}
+
+.teacher-toolbar,
+.teacher-toolbar-actions,
+.teacher-card-actions,
+.teacher-team-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.teacher-toolbar {
+  justify-content: space-between;
+  margin-top: 1rem;
+  border: 1px solid #e2dbcf;
+  border-radius: 8px;
+  background: #fffdf8;
+  padding: 0.85rem;
+}
+
+.teacher-toolbar label {
+  min-width: min(360px, 100%);
+}
+
+.teacher-card-actions {
+  justify-content: flex-end;
+}
+
+.teacher-team-summary {
+  margin-top: 0.75rem;
+}
+
+.teacher-team-summary span {
+  border-radius: 999px;
+  background: #f0ece4;
+  padding: 0.35rem 0.65rem;
+  font-weight: 800;
+}
+
+.teacher-record {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.teacher-record pre {
+  overflow-x: auto;
+  margin: 0;
+  border-radius: 8px;
+  background: #f4f1ea;
+  padding: 0.75rem;
+  white-space: pre-wrap;
+}
+
+.teacher-record a {
+  color: #146c63;
+  font-weight: 800;
+}
+
+.sign-row {
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+}
+
+.prompt-card {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.prompt-en {
+  color: #146c63;
+  font-weight: 800;
+}
+
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.checkbox-row input {
+  width: 22px;
+  height: 22px;
+}
+
+.warning-text {
+  color: #9a3412;
+  font-weight: 800;
+}
+
+.success-text {
+  color: #146c63;
+  font-weight: 800;
+}
+
+@media (max-width: 720px) {
+  .top-bar,
+  .section-heading,
+  .mission-title,
+  .review-row {
+    display: grid;
+  }
+
+  .app-shell {
+    padding: 0.75rem;
+  }
+}

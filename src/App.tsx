@@ -162,6 +162,42 @@ export function App() {
     };
   }, [connectedTeam]);
 
+  useEffect(() => {
+    if (mode !== "teacher" || !teacherUnlocked || !isSupabaseConfigured) return;
+    if (teacherLoading || teacherActionBusy) return;
+
+    let cancelled = false;
+    const refresh = async () => {
+      try {
+        const data = await loadTeacherDashboard();
+        if (!cancelled) {
+          setTeacherDashboardData(data);
+          setTeacherStatus("已自動更新 Supabase 教師後台資料。");
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setTeacherStatus(toFriendlyTeacherError(error));
+        }
+      }
+    };
+    const timer = window.setInterval(refresh, 15000);
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        void refresh();
+      }
+    };
+
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [mode, teacherUnlocked, teacherLoading, teacherActionBusy]);
+
   async function refreshStudentSubmissionStatuses(map = missionIdMap) {
     if (!connectedTeam || !isSupabaseConfigured) return;
 

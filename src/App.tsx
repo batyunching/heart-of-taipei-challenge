@@ -1313,7 +1313,7 @@ function MissionCard({
         />
       ) : null}
       {mission.type === "audio" ? (
-        <PaleontologyFields
+        <PaleontologyFieldsV2
           missionId={mission.id}
           draft={draft}
           updateDraft={updateDraft}
@@ -1463,6 +1463,101 @@ function PaleontologyFields({
   );
 }
 
+function PaleontologyFieldsV2({
+  missionId,
+  draft,
+  updateDraft,
+  onFileSelected,
+  showChinese,
+}: {
+  missionId: string;
+  draft?: MissionDraft;
+  updateDraft: (id: string, patch: MissionDraft) => void;
+  onFileSelected: (id: string, type: MediaType, file: File | undefined) => void;
+  showChinese: boolean;
+}) {
+  const value = draft?.paleontology ?? {};
+  const fields = [
+    ["name", "name", "名稱"],
+    ["type", "fossil or prehistoric animal", "化石或史前動物"],
+    ["lived", "when it lived", "生活年代"],
+    ["ate", "what it ate", "吃什麼"],
+    ["fact", "interesting fact", "有趣的事實"],
+  ];
+
+  return (
+    <div className="paleontology-layout">
+      <div className="mission-direction-box">
+        <strong>Two favorite prehistoric animals</strong>
+        <p>
+          Choose two fossils or prehistoric animals. For each one, complete the five fields below.
+          Then upload one group photo with a paleontology exhibit and record your English introduction.
+        </p>
+        {showChinese ? (
+          <p>請選擇 2 隻最喜歡的化石或史前動物，每一隻都完成 5 個欄位，並上傳一張同學與古生物展品的合照，再錄製英文介紹。</p>
+        ) : null}
+      </div>
+
+      {[0, 1].map((animalIndex) => (
+        <section className="paleontology-animal-card" key={animalIndex}>
+          <h4>Favorite animal {animalIndex + 1}</h4>
+          {showChinese ? <p className="muted">最喜歡的古生物 {animalIndex + 1}</p> : null}
+          <div className="form-grid">
+            {fields.map(([baseKey, label, labelZh]) => {
+              const key = animalIndex === 0 ? baseKey : `${baseKey}2`;
+              return (
+                <label key={key}>
+                  {label}
+                  {showChinese ? <small>{labelZh}</small> : null}
+                  <input
+                    value={value[key] ?? ""}
+                    onChange={(event) =>
+                      updateDraft(missionId, { paleontology: { ...value, [key]: event.target.value } })
+                    }
+                  />
+                </label>
+              );
+            })}
+          </div>
+        </section>
+      ))}
+
+      <div className="sentence-box">
+        <strong>錄音句型</strong>
+        <p>This is a ____.</p>
+        {showChinese ? <small>這是 ____。</small> : null}
+        <p>It lived ____.</p>
+        {showChinese ? <small>它生活在 ____。</small> : null}
+        <p>It ate ____.</p>
+        {showChinese ? <small>它吃 ____。</small> : null}
+        <p>One interesting fact is ____.</p>
+        {showChinese ? <small>一個有趣的事實是 ____。</small> : null}
+      </div>
+
+      <div className="form-grid">
+        <label>
+          合照照片
+          {showChinese ? <small>請上傳一張同學與古生物展品的合照。</small> : null}
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            onChange={(event) => onFileSelected(missionId, "photo", event.target.files?.[0])}
+          />
+        </label>
+        <label>
+          錄音檔
+          {showChinese ? <small>請上傳英文介紹錄音。</small> : null}
+          <input
+            type="file"
+            accept="audio/webm,audio/mp4,audio/mpeg,audio/x-m4a"
+            onChange={(event) => onFileSelected(missionId, "audio", event.target.files?.[0])}
+          />
+        </label>
+      </div>
+    </div>
+  );
+}
+
 function StationSigns({
   missionId,
   draft,
@@ -1486,6 +1581,9 @@ function StationSigns({
           Try to take up to five photos of bilingual signs with different functions. If you cannot find
           all five, upload the signs you find first.
         </p>
+        <p>
+          For each photo, write one English word or phrase you see in the sign, and write its Chinese meaning.
+        </p>
         {showChinese ? (
           <p>目標是五種不同功能的雙語指標；如果現場找不到五張，也可以先上傳已找到的照片。</p>
         ) : null}
@@ -1506,7 +1604,7 @@ function StationSigns({
                 next[index] = { ...sign, english: event.target.value };
                 updateDraft(missionId, { stationSigns: next });
               }}
-              placeholder="English on the sign"
+              placeholder="照片中的一個英文"
             />
             <input
               value={sign.chinese}
@@ -1515,7 +1613,7 @@ function StationSigns({
                 next[index] = { ...sign, chinese: event.target.value };
                 updateDraft(missionId, { stationSigns: next });
               }}
-              placeholder="中文標示"
+              placeholder="這個英文的中文意思"
             />
             <label>
               雙語指標照片
@@ -2480,7 +2578,7 @@ function isMissionComplete(mission: Mission, draft?: MissionDraft) {
     return Boolean(draft.photoName && draft.keyword && draft.sentence);
   }
   if (mission.type === "audio") {
-    return Boolean(draft.audioName && draft.paleontology && Object.keys(draft.paleontology).length >= 5);
+    return Boolean(draft.photoName && draft.audioName && hasPaleontologyAnswers(draft));
   }
   if (mission.type === "station_sign") {
     return countStationSignPhotos(draft) > 0;
@@ -2497,8 +2595,14 @@ function isMissionComplete(mission: Mission, draft?: MissionDraft) {
 function hasMuseumCategoryAnswers(draft?: MissionDraft) {
   const categories = normalizeMuseumCategories(draft);
   return Object.values(categories).every((entries) =>
-    entries.some((entry) => entry.word.trim() && entry.chinese.trim()),
+    entries.every((entry) => entry.word.trim() && entry.chinese.trim()),
   );
+}
+
+function hasPaleontologyAnswers(draft?: MissionDraft) {
+  const value = draft?.paleontology ?? {};
+  const requiredKeys = ["name", "type", "lived", "ate", "fact", "name2", "type2", "lived2", "ate2", "fact2"];
+  return requiredKeys.every((key) => String(value[key] ?? "").trim());
 }
 
 function normalizeStationSigns(draft?: MissionDraft) {
@@ -2528,7 +2632,7 @@ function normalizeMuseumCategories(draft?: MissionDraft) {
   const result = Object.fromEntries(
     categoryIds.map((categoryId) => [
       categoryId,
-      Array.from({ length: 5 }, (_, index) => ({
+      Array.from({ length: 3 }, (_, index) => ({
         word: draft?.museumCategories?.[categoryId]?.[index]?.word ?? "",
         chinese: draft?.museumCategories?.[categoryId]?.[index]?.chinese ?? "",
       })),

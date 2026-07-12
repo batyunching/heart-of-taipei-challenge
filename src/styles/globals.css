@@ -742,6 +742,24 @@ label small,
   padding: 0.62rem;
 }
 
+.paleontology-layout {
+  display: grid;
+  gap: 0.9rem;
+  margin-top: 1rem;
+}
+
+.paleontology-animal-card {
+  border: 1px solid rgba(120, 99, 68, 0.22);
+  border-radius: 8px;
+  background: rgba(255, 253, 248, 0.88);
+  padding: 0.85rem;
+}
+
+.paleontology-animal-card h4 {
+  margin: 0 0 0.25rem;
+  font-size: 1.05rem;
+}
+
 .teacher-record pre {
   overflow-x: auto;
   margin: 0;

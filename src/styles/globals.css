@@ -760,6 +760,12 @@ label small,
   font-size: 1.05rem;
 }
 
+.paleontology-media-grid {
+  margin-top: 0.85rem;
+  border-top: 1px solid rgba(120, 99, 68, 0.18);
+  padding-top: 0.85rem;
+}
+
 .teacher-record pre {
   overflow-x: auto;
   margin: 0;

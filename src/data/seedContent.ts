@@ -156,8 +156,8 @@ export const missions: Mission[] = [
     titleZh: "古生物英文介紹",
     titleEn: "Paleontology English Recording",
     introEn:
-      "Choose two favorite fossils or prehistoric animals. Complete five fields for each one, upload one group photo with a paleontology exhibit, and record your English introduction.",
-    introZh: "選擇 2 隻最喜歡的化石或史前動物，每一隻完成 5 個欄位，上傳一張同學與古生物展品的合照，並錄製英文介紹。",
+      "Choose two favorite fossils or prehistoric animals. Complete five fields for each one. For each animal, upload one group photo with that exhibit and one English recording.",
+    introZh: "選擇 2 隻最喜歡的化石或史前動物，每一隻完成 5 個欄位。每一隻都要各自上傳一張同學與該展品的合照，以及一段英文介紹錄音。",
     keywords: ["fossil", "prehistoric", "animal"],
     requiredMedia: "audio",
   },

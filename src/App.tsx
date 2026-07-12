@@ -90,6 +90,7 @@ export function App() {
   const [selectedFiles, setSelectedFiles] = useState<Record<string, Partial<Record<MediaType, File>>>>({});
   const [worldFriendFiles, setWorldFriendFiles] = useState<Record<string, File>>({});
   const [stationSignFiles, setStationSignFiles] = useState<Record<string, File>>({});
+  const [paleontologyFiles, setPaleontologyFiles] = useState<Record<string, File>>({});
   const [drafts, setDrafts] = useState<Record<string, MissionDraft>>(() => loadDrafts());
   const [showChinese, setShowChinese] = useState<Record<PageKey, boolean>>({
     home: false,
@@ -268,6 +269,31 @@ export function App() {
     });
   }
 
+  function selectPaleontologyMedia(missionId: string, animalIndex: number, type: MediaType, file: File | undefined) {
+    const fileKey = `${missionId}:${animalIndex}:${type}`;
+    setPaleontologyFiles((current) => {
+      const next = { ...current };
+      if (file) {
+        next[fileKey] = file;
+      } else {
+        delete next[fileKey];
+      }
+      return next;
+    });
+
+    const currentValue = drafts[missionId]?.paleontology ?? {};
+    const fieldKey = `${type}Name${animalIndex + 1}`;
+    const nextValue = {
+      ...currentValue,
+      [fieldKey]: file?.name ?? "",
+    };
+    updateDraft(missionId, {
+      paleontology: nextValue,
+      photoName: [nextValue.photoName1, nextValue.photoName2].filter(Boolean).join("、"),
+      audioName: [nextValue.audioName1, nextValue.audioName2].filter(Boolean).join("、"),
+    });
+  }
+
   function updateMember(index: number, key: keyof TeamDraft["members"][number], value: string) {
     setTeam((current) => {
       const members = [...current.members];
@@ -343,6 +369,7 @@ export function App() {
     setSelectedFiles({});
     setWorldFriendFiles({});
     setStationSignFiles({});
+    setPaleontologyFiles({});
     setActivePage("home");
     setTeamSyncStatus("已登出目前小組。");
     setStudentView("landing");
@@ -602,6 +629,28 @@ export function App() {
       return;
     }
 
+    if (missionId === "paleo-recording") {
+      for (const animalIndex of [0, 1]) {
+        for (const type of ["photo", "audio"] as MediaType[]) {
+          const file = paleontologyFiles[`${missionId}:${animalIndex}:${type}`];
+          if (!file) continue;
+
+          setMissionSyncStatus((current) => ({
+            ...current,
+            [missionId]: `正在上傳古生物 ${animalIndex + 1} 的${type === "photo" ? "照片" : "錄音"}...`,
+          }));
+          await uploadMissionMedia({
+            teamId,
+            missionId: dbMissionId,
+            file,
+            type,
+          });
+        }
+      }
+
+      return;
+    }
+
     const files = selectedFiles[missionId] ?? {};
 
     if (files.photo) {
@@ -678,6 +727,11 @@ export function App() {
       }
       if (mission.id === "station-signs") {
         setStationSignFiles((current) =>
+          Object.fromEntries(Object.entries(current).filter(([key]) => !key.startsWith(`${mission.id}:`))),
+        );
+      }
+      if (mission.id === "paleo-recording") {
+        setPaleontologyFiles((current) =>
           Object.fromEntries(Object.entries(current).filter(([key]) => !key.startsWith(`${mission.id}:`))),
         );
       }
@@ -1053,6 +1107,7 @@ export function App() {
               updateDraft={updateDraft}
               onFileSelected={selectMissionFile}
               onStationPhotoSelected={selectStationSignPhoto}
+              onPaleontologyMediaSelected={selectPaleontologyMedia}
               onSave={() => handleSaveMission(mission)}
               saveStatus={missionSyncStatus[mission.id] ?? missionSyncStatus.system}
               submissionStatus={studentSubmissionStatuses[mission.id]}
@@ -1259,6 +1314,7 @@ function MissionCard({
   updateDraft,
   onFileSelected,
   onStationPhotoSelected,
+  onPaleontologyMediaSelected,
   onSave,
   saveStatus,
   submissionStatus,
@@ -1269,6 +1325,7 @@ function MissionCard({
   updateDraft: (id: string, patch: MissionDraft) => void;
   onFileSelected: (id: string, type: MediaType, file: File | undefined) => void;
   onStationPhotoSelected: (missionId: string, index: number, file: File | undefined) => void;
+  onPaleontologyMediaSelected: (missionId: string, animalIndex: number, type: MediaType, file: File | undefined) => void;
   onSave: () => void;
   saveStatus?: string;
   submissionStatus?: SubmissionStatus;
@@ -1317,7 +1374,7 @@ function MissionCard({
           missionId={mission.id}
           draft={draft}
           updateDraft={updateDraft}
-          onFileSelected={onFileSelected}
+          onMediaSelected={onPaleontologyMediaSelected}
           showChinese={showMissionChinese}
         />
       ) : null}
@@ -1467,13 +1524,13 @@ function PaleontologyFieldsV2({
   missionId,
   draft,
   updateDraft,
-  onFileSelected,
+  onMediaSelected,
   showChinese,
 }: {
   missionId: string;
   draft?: MissionDraft;
   updateDraft: (id: string, patch: MissionDraft) => void;
-  onFileSelected: (id: string, type: MediaType, file: File | undefined) => void;
+  onMediaSelected: (missionId: string, animalIndex: number, type: MediaType, file: File | undefined) => void;
   showChinese: boolean;
 }) {
   const value = draft?.paleontology ?? {};
@@ -1491,10 +1548,10 @@ function PaleontologyFieldsV2({
         <strong>Two favorite prehistoric animals</strong>
         <p>
           Choose two fossils or prehistoric animals. For each one, complete the five fields below.
-          Then upload one group photo with a paleontology exhibit and record your English introduction.
+          Then upload one group photo with that exhibit and one English recording for that animal.
         </p>
         {showChinese ? (
-          <p>請選擇 2 隻最喜歡的化石或史前動物，每一隻都完成 5 個欄位，並上傳一張同學與古生物展品的合照，再錄製英文介紹。</p>
+          <p>請選擇 2 隻最喜歡的化石或史前動物，每一隻都完成 5 個欄位，並各自上傳一張同學與該展品的合照，以及一段英文介紹錄音。</p>
         ) : null}
       </div>
 
@@ -1519,6 +1576,32 @@ function PaleontologyFieldsV2({
               );
             })}
           </div>
+          <div className="form-grid paleontology-media-grid">
+            <label>
+              合照照片 {animalIndex + 1}
+              {showChinese ? <small>請上傳同學與這一個古生物展品的合照。</small> : null}
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={(event) => onMediaSelected(missionId, animalIndex, "photo", event.target.files?.[0])}
+              />
+              {value[`photoName${animalIndex + 1}`] ? (
+                <small>已選擇：{value[`photoName${animalIndex + 1}`]}</small>
+              ) : null}
+            </label>
+            <label>
+              錄音檔 {animalIndex + 1}
+              {showChinese ? <small>請錄製這一個古生物的英文介紹。</small> : null}
+              <input
+                type="file"
+                accept="audio/webm,audio/mp4,audio/mpeg,audio/x-m4a"
+                onChange={(event) => onMediaSelected(missionId, animalIndex, "audio", event.target.files?.[0])}
+              />
+              {value[`audioName${animalIndex + 1}`] ? (
+                <small>已選擇：{value[`audioName${animalIndex + 1}`]}</small>
+              ) : null}
+            </label>
+          </div>
         </section>
       ))}
 
@@ -1534,26 +1617,6 @@ function PaleontologyFieldsV2({
         {showChinese ? <small>一個有趣的事實是 ____。</small> : null}
       </div>
 
-      <div className="form-grid">
-        <label>
-          合照照片
-          {showChinese ? <small>請上傳一張同學與古生物展品的合照。</small> : null}
-          <input
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            onChange={(event) => onFileSelected(missionId, "photo", event.target.files?.[0])}
-          />
-        </label>
-        <label>
-          錄音檔
-          {showChinese ? <small>請上傳英文介紹錄音。</small> : null}
-          <input
-            type="file"
-            accept="audio/webm,audio/mp4,audio/mpeg,audio/x-m4a"
-            onChange={(event) => onFileSelected(missionId, "audio", event.target.files?.[0])}
-          />
-        </label>
-      </div>
     </div>
   );
 }
@@ -2578,7 +2641,7 @@ function isMissionComplete(mission: Mission, draft?: MissionDraft) {
     return Boolean(draft.photoName && draft.keyword && draft.sentence);
   }
   if (mission.type === "audio") {
-    return Boolean(draft.photoName && draft.audioName && hasPaleontologyAnswers(draft));
+    return Boolean(hasPaleontologyAnswers(draft) && hasPaleontologyMedia(draft));
   }
   if (mission.type === "station_sign") {
     return countStationSignPhotos(draft) > 0;
@@ -2603,6 +2666,13 @@ function hasPaleontologyAnswers(draft?: MissionDraft) {
   const value = draft?.paleontology ?? {};
   const requiredKeys = ["name", "type", "lived", "ate", "fact", "name2", "type2", "lived2", "ate2", "fact2"];
   return requiredKeys.every((key) => String(value[key] ?? "").trim());
+}
+
+function hasPaleontologyMedia(draft?: MissionDraft) {
+  const value = draft?.paleontology ?? {};
+  return ["photoName1", "audioName1", "photoName2", "audioName2"].every((key) =>
+    String(value[key] ?? "").trim(),
+  );
 }
 
 function normalizeStationSigns(draft?: MissionDraft) {

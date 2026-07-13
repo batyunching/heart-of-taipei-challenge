@@ -198,20 +198,20 @@ export const interviewPrompts: InterviewPrompt[] = [
   {
     id: "invite",
     label: "邀請訪談",
-    zh: "你好，我們是大觀國中的學生。我們正在進行跟外國人交談的訪談活動。活動大概三到五分鐘，您願意接受我們的訪談嗎？",
-    en: "Hello, we are students from Ta-guan Junior High School. We are doing an interview activity to talk with international visitors. It will take about three to five minutes. Would you be willing to answer a few questions?",
+    zh: "你好，我們是大觀國中的學生。我們正在進行一個關於您在臺灣經驗的訪談。大約需要三到五分鐘。您願意回答一些問題嗎？",
+    en: "Hello, we are students from Ta-Kuan Junior High School. We are doing an interview about your experience in Taiwan. It will take about three to five minutes. Would you like to answer some questions?",
   },
   {
     id: "country",
     label: "詢問國家",
-    zh: "請問您是從哪一個國家來的？",
-    en: "Which country are you from?",
+    zh: "請問您來自哪裡？",
+    en: "Where are you from?",
   },
   {
     id: "why-taiwan",
     label: "詢問來臺原因",
-    zh: "請問您為什麼會來臺灣？",
-    en: "Why did you come to Taiwan?",
+    zh: "是什麼原因讓您來到臺灣？／您為什麼來臺灣？",
+    en: "What brought you to Taiwan? / Why did you come to Taiwan?",
   },
   {
     id: "favorite",
@@ -220,10 +220,22 @@ export const interviewPrompts: InterviewPrompt[] = [
     en: "What do you like most about Taiwan?",
   },
   {
-    id: "unfamiliar",
-    label: "詢問不習慣之處",
-    zh: "請問有沒有哪一個點，是您來臺灣最不喜歡或最不習慣的地方？",
-    en: "Is there anything you dislike or are not used to in Taiwan?",
+    id: "culture-surprise",
+    label: "詢問文化驚訝",
+    zh: "有沒有哪一項臺灣文化讓您覺得驚訝？",
+    en: "Is there any Taiwanese culture that surprised you?",
+  },
+  {
+    id: "difference",
+    label: "詢問最大差異",
+    zh: "臺灣和您的國家最大的不同是什麼？",
+    en: "What is the biggest difference between Taiwan and your country?",
+  },
+  {
+    id: "message",
+    label: "詢問給學生的話",
+    zh: "您有沒有什麼話想送給臺灣的學生？",
+    en: "Do you have any messages for Taiwanese students?",
   },
   {
     id: "photo",
